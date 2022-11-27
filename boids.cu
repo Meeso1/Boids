@@ -1,7 +1,20 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <cuda_runtime.h>
+#include <math.h>
 
-#define NUM_OF_FISHES 10
+#define NUM_OF_FISHES 50
+#define SCENE_SIZE 100
+#define MAX_INIT_V 2
+#define MAX_V 8
+#define INTERACTION1_RADIUS 5
+#define INTERACTION2_RADIUS 5
+#define INTERACTION3_RADIUS 10
+#define INTERACTION4_RADIUS 5
+#define ATTRACTION_STR 2
+#define SEPARATION_STR 2
+#define ALIGNMENT_STR 5
+#define REPULSION_STR 1
 
 struct Fish{
   double* x;
@@ -10,17 +23,125 @@ struct Fish{
   double* vy;
 };
 
+__host__ __device__ double length(double x, double y){
+  return sqrt(x*x + y*y);
+}
+
+__device__ void clip_speed(double max, double* vx, double* vy){
+  double len = length(*vx, *vy);
+  
+  if(len < max || len <= 0){
+    return;
+  }
+
+  *vx = *vx / len * max;
+  *vy = *vy / len * max;
+}
+
 __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) {
   int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-  if (i < numElements) {
-    out.x[i]  = in.x[i]  + in.vx[i] * dt;
-    out.y[i]  = in.y[i]  + in.vy[i] * dt;
-    out.vy[i] = in.vy[i] - 1.0 * dt;
+  if(i >= numElements){
+    return;
   }
+
+  // Rule 1: Attraction
+  double centerX = 0;
+  double centerY = 0;
+  int rule1Neighbours = 0;
+  for(int k = 0; k < numElements; k++){
+    if(k == i) continue;
+
+    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
+    if(distance > INTERACTION1_RADIUS) continue;
+
+    centerX += in.x[k];
+    centerY += in.y[k];
+    rule1Neighbours++;
+  }
+
+  double vx1 = 0;
+  double vy1 = 0;
+  if(rule1Neighbours != 0){
+    centerX /= rule1Neighbours;
+    centerY /= rule1Neighbours;
+
+    vx1 = (centerX - in.x[i]) * ATTRACTION_STR;
+    vy1 = (centerY - in.y[i]) * ATTRACTION_STR;
+  }
+
+  // Rule 2: Separation
+  double sepX = 0;
+  double sepY = 0;
+  for(int k = 0; k < numElements; k++){
+    if(k == i) continue;
+
+    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
+    if(distance > INTERACTION2_RADIUS) continue;
+
+    sepX -= in.x[k] - in.x[i];
+    sepY -= in.y[k] - in.y[i];
+  }
+
+  double vx2 = sepX * SEPARATION_STR;
+  double vy2 = sepY * SEPARATION_STR;
+
+  // Rule 3: Alignment
+  double vx3 = in.vx[i];
+  double vy3 = in.vy[i];
+  int rule3Neighbours = 0;
+  for(int k = 0; k < numElements; k++){
+    if(k == i) continue;
+
+    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
+    if(distance > INTERACTION1_RADIUS) continue;
+
+    vx3 += in.vx[k];
+    vy3 += in.vy[k];
+    rule3Neighbours++;
+  }
+
+  if(rule1Neighbours != 0){
+    vx3 -= in.vx[i];
+    vy3 -= in.vy[i];
+
+    vx3 /= rule3Neighbours;
+    vy3 /= rule3Neighbours;
+  }
+
+  // Rule 4: Avoidance
+  double vx4 = 0;
+  double vy4 = 0;
+  if(in.x[i] < INTERACTION4_RADIUS){
+    vx4 = (INTERACTION4_RADIUS - in.x[i]) * REPULSION_STR;
+  }
+  else if(in.x[i] > SCENE_SIZE - INTERACTION4_RADIUS){
+    vx4 = - (in.x[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+  }
+
+  if(in.y[i] < INTERACTION4_RADIUS){
+    vy4 = (INTERACTION4_RADIUS - in.y[i]) * REPULSION_STR;
+  }
+  else if(in.y[i] > SCENE_SIZE - INTERACTION4_RADIUS){
+    vy4 = - (in.y[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+  }
+
+  double ax = (vx1 + vx2 + vx3 + vx4) - in.vx[i];
+  double ay = (vy1 + vy2 + vy3 + vy4) - in.vy[i];
+
+  // Doesn't work :(
+  out.vx[i] = in.vx[i] + ax; //* dt;
+  out.vy[i] = in.vy[i] + ay; //* dt;
+
+  clip_speed(MAX_V, &(out.vx[i]), &(out.vy[i]));
+
+  out.x[i]  = in.x[i]  + out.vx[i] * dt;
+  out.y[i]  = in.y[i]  + out.vy[i] * dt;
 }
 
 Fish* initFish(int number){
+  srand(1234567890);
+
   Fish* fish = (Fish*)malloc(sizeof(Fish));
   
   fish->x = (double*)malloc(number*sizeof(double));
@@ -29,10 +150,10 @@ Fish* initFish(int number){
   fish->vy = (double*)malloc(number*sizeof(double));
 
   for(int i = 0; i < number; i++){
-    fish->x[i] = i;
-    fish->y[i] = 0;
-    fish->vx[i] = 0;
-    fish->vy[i] = 5;
+    fish->x[i]  = (rand() % (SCENE_SIZE * 100)) / 100.0;
+    fish->y[i]  = (rand() % (SCENE_SIZE * 100)) / 100.0;
+    fish->vx[i] = (rand() % (MAX_INIT_V * 100)) / 100.0 - (MAX_INIT_V / 2.0);
+    fish->vy[i] = (rand() % (MAX_INIT_V * 100)) / 100.0 - (MAX_INIT_V / 2.0);
   }
 
   return fish;
@@ -112,7 +233,7 @@ int main(void) {
   
   double dt = 0.01;
   double time = 0;
-  double max_time = 15;
+  double max_time = 100;
   double* tmp = (double*)malloc(vector_size);
 
   fprintf(stdout, "t = %6.3f:\n", time);
