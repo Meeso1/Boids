@@ -5,16 +5,17 @@
 
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
-#define MAX_INIT_V 2
-#define MAX_V 8
-#define INTERACTION1_RADIUS 5
-#define INTERACTION2_RADIUS 5
-#define INTERACTION3_RADIUS 10
-#define INTERACTION4_RADIUS 5
-#define ATTRACTION_STR 2
-#define SEPARATION_STR 2
-#define ALIGNMENT_STR 5
-#define REPULSION_STR 1
+#define MIN_V 1
+#define MAX_V 10
+#define INTERACTION1_RADIUS 8
+#define INTERACTION2_RADIUS 3
+#define INTERACTION3_RADIUS 5
+#define INTERACTION4_RADIUS 8
+#define ATTRACTION_STR 3
+#define SEPARATION_STR 5
+#define ALIGNMENT_STR 2
+#define REPULSION_STR 8
+#define COS_FOV 0
 
 struct Fish{
   double* x;
@@ -23,19 +24,39 @@ struct Fish{
   double* vy;
 };
 
+struct Vector2{
+  double x;
+  double y;
+};
+
 __host__ __device__ double length(double x, double y){
   return sqrt(x*x + y*y);
 }
 
-__device__ void clip_speed(double max, double* vx, double* vy){
+__host__ __device__ void clip_speed(double min, double max, double* vx, double* vy){
   double len = length(*vx, *vy);
   
-  if(len < max || len <= 0){
+  if(len <= 0){
     return;
   }
 
-  *vx = *vx / len * max;
-  *vy = *vy / len * max;
+  if(len > max){
+    *vx = *vx / len * max;
+    *vy = *vy / len * max;
+  }
+  else if(len < min){
+    *vx = *vx / len * min;
+    *vy = *vy / len * min;
+  }
+}
+
+__device__ bool is_in_front(Vector2 fish, Vector2 other, Vector2 v, double cos_fov){
+  Vector2 r = {other.x - fish.x, other.y - fish.y};
+  double r_length = length(r.x, r.y);
+  double v_length = length(v.x, v.y);
+  if(r_length == 0 || v_length == 0) return true;
+  double cos_r_v = (r.x * v.x + r.y * v.y) / (r_length * v_length);
+  return cos_r_v >= cos_fov;
 }
 
 __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) {
@@ -46,8 +67,7 @@ __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) 
   }
 
   // Rule 1: Attraction
-  double centerX = 0;
-  double centerY = 0;
+  Vector2 center = {0, 0};
   int rule1Neighbours = 0;
   for(int k = 0; k < numElements; k++){
     if(k == i) continue;
@@ -55,40 +75,40 @@ __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) 
     double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
     if(distance > INTERACTION1_RADIUS) continue;
 
-    centerX += in.x[k];
-    centerY += in.y[k];
+    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
+
+    center.x += in.x[k];
+    center.y += in.y[k];
     rule1Neighbours++;
   }
 
-  double vx1 = 0;
-  double vy1 = 0;
+  Vector2 v1 = {0, 0};
   if(rule1Neighbours != 0){
-    centerX /= rule1Neighbours;
-    centerY /= rule1Neighbours;
+    center.x /= rule1Neighbours;
+    center.y /= rule1Neighbours;
 
-    vx1 = (centerX - in.x[i]) * ATTRACTION_STR;
-    vy1 = (centerY - in.y[i]) * ATTRACTION_STR;
+    v1.x = (center.x - in.x[i]) * ATTRACTION_STR;
+    v1.y = (center.y - in.y[i]) * ATTRACTION_STR;
   }
 
   // Rule 2: Separation
-  double sepX = 0;
-  double sepY = 0;
+  Vector2 sep = {0, 0};
   for(int k = 0; k < numElements; k++){
     if(k == i) continue;
 
     double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
     if(distance > INTERACTION2_RADIUS) continue;
 
-    sepX -= in.x[k] - in.x[i];
-    sepY -= in.y[k] - in.y[i];
+    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
+
+    sep.x -= in.x[k] - in.x[i];
+    sep.y -= in.y[k] - in.y[i];
   }
 
-  double vx2 = sepX * SEPARATION_STR;
-  double vy2 = sepY * SEPARATION_STR;
+  Vector2 v2 = {sep.x * SEPARATION_STR, sep.y * SEPARATION_STR};
 
   // Rule 3: Alignment
-  double vx3 = in.vx[i];
-  double vy3 = in.vy[i];
+  Vector2 v_sum = {0, 0};
   int rule3Neighbours = 0;
   for(int k = 0; k < numElements; k++){
     if(k == i) continue;
@@ -96,47 +116,44 @@ __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) 
     double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
     if(distance > INTERACTION1_RADIUS) continue;
 
-    vx3 += in.vx[k];
-    vy3 += in.vy[k];
+    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
+
+    v_sum.x += in.vx[k];
+    v_sum.y += in.vy[k];
     rule3Neighbours++;
   }
 
-  if(rule1Neighbours != 0){
-    vx3 -= in.vx[i];
-    vy3 -= in.vy[i];
-
-    vx3 /= rule3Neighbours;
-    vy3 /= rule3Neighbours;
+  Vector2 v3 = {0, 0};
+  if(rule3Neighbours != 0){
+    v3 = {v_sum.x / rule3Neighbours - in.vx[i], v_sum.y / rule3Neighbours - in.vy[i]};
+    v3.x *= ALIGNMENT_STR;
+    v3.y *= ALIGNMENT_STR;
   }
 
   // Rule 4: Avoidance
-  double vx4 = 0;
-  double vy4 = 0;
+  Vector2 v4 = {0, 0};
   if(in.x[i] < INTERACTION4_RADIUS){
-    vx4 = (INTERACTION4_RADIUS - in.x[i]) * REPULSION_STR;
+    v4.x = (INTERACTION4_RADIUS - in.x[i]) * REPULSION_STR;
   }
   else if(in.x[i] > SCENE_SIZE - INTERACTION4_RADIUS){
-    vx4 = - (in.x[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+    v4.x = - (in.x[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
   }
 
   if(in.y[i] < INTERACTION4_RADIUS){
-    vy4 = (INTERACTION4_RADIUS - in.y[i]) * REPULSION_STR;
+    v4.y = (INTERACTION4_RADIUS - in.y[i]) * REPULSION_STR;
   }
   else if(in.y[i] > SCENE_SIZE - INTERACTION4_RADIUS){
-    vy4 = - (in.y[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+    v4.y = - (in.y[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
   }
 
-  double ax = (vx1 + vx2 + vx3 + vx4) - in.vx[i];
-  double ay = (vy1 + vy2 + vy3 + vy4) - in.vy[i];
+  Vector2 dv = {v1.x + v2.x + v3.x + v4.x, v1.y + v2.y + v3.y + v4.y};
+  out.vx[i] = in.vx[i] + dv.x;
+  out.vy[i] = in.vy[i] + dv.y;
 
-  // Doesn't work :(
-  out.vx[i] = in.vx[i] + ax; //* dt;
-  out.vy[i] = in.vy[i] + ay; //* dt;
+  clip_speed(MIN_V, MAX_V, &(out.vx[i]), &(out.vy[i]));
 
-  clip_speed(MAX_V, &(out.vx[i]), &(out.vy[i]));
-
-  out.x[i]  = in.x[i]  + out.vx[i] * dt;
-  out.y[i]  = in.y[i]  + out.vy[i] * dt;
+  out.x[i] = in.x[i] + out.vx[i] * dt;
+  out.y[i] = in.y[i] + out.vy[i] * dt;
 }
 
 Fish* initFish(int number){
@@ -152,8 +169,12 @@ Fish* initFish(int number){
   for(int i = 0; i < number; i++){
     fish->x[i]  = (rand() % (SCENE_SIZE * 100)) / 100.0;
     fish->y[i]  = (rand() % (SCENE_SIZE * 100)) / 100.0;
-    fish->vx[i] = (rand() % (MAX_INIT_V * 100)) / 100.0 - (MAX_INIT_V / 2.0);
-    fish->vy[i] = (rand() % (MAX_INIT_V * 100)) / 100.0 - (MAX_INIT_V / 2.0);
+
+    do{
+      fish->vx[i] = (rand() % (2 * MAX_V * 100)) / 100.0 - MAX_V;
+      fish->vy[i] = (rand() % (2 * MAX_V * 100)) / 100.0 - MAX_V;
+      clip_speed(MIN_V, MAX_V, &(fish->vx[i]), &(fish->vy[i]));
+    }while(fish->vx[i] * fish->vy[i] == 0);
   }
 
   return fish;
@@ -192,12 +213,30 @@ void printVector(double* vector, size_t size){
   fprintf(stdout, "]\n");
 }
 
-int main(void) {
-  // Error code to check return values for CUDA calls
-  cudaError_t err = cudaSuccess;
+void printFrame(const Fish* fishes, int num_of_fishes, double time){
+  size_t vector_size = num_of_fishes*sizeof(double);
+  double* tmp = (double*)malloc(vector_size);
 
-  Fish* fish = initFish(NUM_OF_FISHES);
-  size_t vector_size = NUM_OF_FISHES*sizeof(double);
+  fprintf(stdout, "t = %6.3f:\n", time);
+
+  deviceCopy(tmp, fishes->x, vector_size, cudaMemcpyDeviceToHost);
+  printVector(tmp, num_of_fishes);
+
+  deviceCopy(tmp, fishes->y, vector_size, cudaMemcpyDeviceToHost);
+  printVector(tmp, num_of_fishes);
+
+  deviceCopy(tmp, fishes->vx, vector_size, cudaMemcpyDeviceToHost);
+  printVector(tmp, num_of_fishes);
+
+  deviceCopy(tmp, fishes->vy, vector_size, cudaMemcpyDeviceToHost);
+  printVector(tmp, num_of_fishes);
+
+  free(tmp);
+}
+
+void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int num_of_fishes){
+  Fish* fish = initFish(num_of_fishes);
+  size_t vector_size = num_of_fishes*sizeof(double);
 
   // Allocate the device input vector
   Fish* d_in_fish = (Fish*)malloc(sizeof(Fish));
@@ -227,68 +266,67 @@ int main(void) {
   deviceCopy(d_in_fish->vx, fish->vx, vector_size, cudaMemcpyHostToDevice);
   deviceCopy(d_in_fish->vy, fish->vy, vector_size, cudaMemcpyHostToDevice);
 
-  // Launch the Vector Add CUDA Kernel
-  int threadsPerBlock = NUM_OF_FISHES;
-  int blocksPerGrid = 1;
-  
-  double dt = 0.01;
-  double time = 0;
-  double max_time = 100;
-  double* tmp = (double*)malloc(vector_size);
+  *device_in_fishes = d_in_fish;
+  *device_out_fishes = d_out_fish;
 
-  fprintf(stdout, "t = %6.3f:\n", time);
-  deviceCopy(tmp, d_in_fish->x, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, NUM_OF_FISHES);
-  deviceCopy(tmp, d_in_fish->y, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, NUM_OF_FISHES);
-  deviceCopy(tmp, d_in_fish->vx, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, NUM_OF_FISHES);
-  deviceCopy(tmp, d_in_fish->vy, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, NUM_OF_FISHES);
-
-  while(time < max_time){
-    updateFish<<<blocksPerGrid, threadsPerBlock>>>(*d_in_fish, *d_out_fish, dt, NUM_OF_FISHES);
-    err = cudaGetLastError();
-    if (err != cudaSuccess) {
-      fprintf(stderr, "Failed to launch kernel (error code %s)!\n", cudaGetErrorString(err));
-      exit(EXIT_FAILURE);
-    }
-
-    deviceCopy(d_in_fish->x, d_out_fish->x, vector_size, cudaMemcpyDeviceToDevice);
-    deviceCopy(d_in_fish->y, d_out_fish->y, vector_size, cudaMemcpyDeviceToDevice);
-    deviceCopy(d_in_fish->vx, d_out_fish->vx, vector_size, cudaMemcpyDeviceToDevice);
-    deviceCopy(d_in_fish->vy, d_out_fish->vy, vector_size, cudaMemcpyDeviceToDevice);
-
-    time += dt;
-
-    fprintf(stdout, "t = %6.3f:\n", time);
-    deviceCopy(tmp, d_out_fish->x, vector_size, cudaMemcpyDeviceToHost);
-    printVector(tmp, NUM_OF_FISHES);
-    deviceCopy(tmp, d_out_fish->y, vector_size, cudaMemcpyDeviceToHost);
-    printVector(tmp, NUM_OF_FISHES);
-    deviceCopy(tmp, d_out_fish->vx, vector_size, cudaMemcpyDeviceToHost);
-    printVector(tmp, NUM_OF_FISHES);
-    deviceCopy(tmp, d_out_fish->vy, vector_size, cudaMemcpyDeviceToHost);
-    printVector(tmp, NUM_OF_FISHES);
-  }
-
-  // Free device memory
-  deviceFree(d_in_fish->x);
-  deviceFree(d_in_fish->y);
-  deviceFree(d_in_fish->vx);
-  deviceFree(d_in_fish->vy);
-  deviceFree(d_out_fish->x);
-  deviceFree(d_out_fish->y);
-  deviceFree(d_out_fish->vx);
-  deviceFree(d_out_fish->vy);
-
-  // Free host memory
   free(fish->x);
   free(fish->y);
   free(fish->vx);
   free(fish->vy);
   free(fish);
-  free(tmp);
+}
+
+void copyFishes(const Fish* source, Fish* destination, int num_of_fishes){
+  size_t vector_size = num_of_fishes*sizeof(double);
+  deviceCopy(source->x, destination->x, vector_size, cudaMemcpyDeviceToDevice);
+  deviceCopy(source->y, destination->y, vector_size, cudaMemcpyDeviceToDevice);
+  deviceCopy(source->vx, destination->vx, vector_size, cudaMemcpyDeviceToDevice);
+  deviceCopy(source->vy, destination->vy, vector_size, cudaMemcpyDeviceToDevice);
+}
+
+void freeFishes(Fish* fishes){
+  deviceFree(fishes->x);
+  deviceFree(fishes->y);
+  deviceFree(fishes->vx);
+  deviceFree(fishes->vy);
+}
+
+void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, double dt){
+  // Launch CUDA Kernel
+  updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, dt, num_of_fishes);
+
+  // Check errors
+  cudaError_t err = cudaGetLastError();
+  if (err != cudaSuccess) {
+    fprintf(stderr, "Failed to launch kernel (error code %s)!\n", cudaGetErrorString(err));
+    exit(EXIT_FAILURE);
+  }
+
+  copyFishes(in_fishes, out_fishes, num_of_fishes);
+}
+
+#ifndef AS_INCLUDE
+int main(void) {
+  Fish* d_in_fish;
+  Fish* d_out_fish;
+  initSimulation(&d_in_fish, &d_out_fish, NUM_OF_FISHES);
+
+  double dt = 0.01;
+  double time = 0;
+  double max_time = 100;
+  
+  printFrame(d_in_fish, NUM_OF_FISHES, time);
+
+  while(time < max_time){
+    advance(d_in_fish, d_out_fish, NUM_OF_FISHES, dt);
+    time += dt;
+    printFrame(d_in_fish, NUM_OF_FISHES, time);
+  }
+
+  // Free device memory
+  freeFishes(d_in_fish);
+  freeFishes(d_out_fish);
 
   return 0;
 }
+#endif
