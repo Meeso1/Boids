@@ -103,6 +103,8 @@ unsigned int frameCount = 0;
 Fish* in_fishes;
 Fish* out_fishes;
 
+#define BOID_SIZE 0.02
+
 #define MAX(a,b) ((a > b) ? a : b)
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -139,8 +141,14 @@ __global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
     u = u*2.0f - 1.0f;
     v = v*2.0f - 1.0f;
 
-    // write output vertex
-    pos[i] = make_float4(u, v, 0.0f, 1.0f);
+    float len_v = (float)length(fishes.vx[i], fishes.vy[i]);
+    float dx = fishes.vx[i] / len_v * BOID_SIZE;
+    float dy = fishes.vy[i] / len_v * BOID_SIZE;
+
+    // write output vertices
+    pos[3*i]     = make_float4(u + dx, v + dy, 0.0f, 1.0f);
+    pos[3*i + 1] = make_float4(u - dy/3, v + dx/3, 0.0f, 1.0f);
+    pos[3*i + 2] = make_float4(u + dy/3, v - dx/3, 0.0f, 1.0f);
 }
 
 int main(int argc, char **argv)
@@ -273,7 +281,7 @@ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
     glBindBuffer(GL_ARRAY_BUFFER, *vbo);
 
     // initialize buffer object
-    unsigned int size = NUM_OF_BOIDS * 4 * sizeof(float);
+    unsigned int size = NUM_OF_BOIDS * 4 * sizeof(float) * 3; // triangle per boid
     glBufferData(GL_ARRAY_BUFFER, size, 0, GL_DYNAMIC_DRAW);
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -322,7 +330,7 @@ void display()
     // set display color
     glColor3f(1.0, 0.0, 0.0);
     // ???
-    glDrawArrays(GL_POINTS, 0, NUM_OF_BOIDS);
+    glDrawArrays(GL_TRIANGLES, 0, NUM_OF_BOIDS * 3);
     // ???
     glDisableClientState(GL_VERTEX_ARRAY);
 
