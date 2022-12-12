@@ -2,19 +2,26 @@
 #include <stdlib.h>
 #include <cuda_runtime.h>
 #include <math.h>
+#include "cudaUtils.cu"
 
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
+
 #define MIN_V 1
 #define MAX_V 10
-#define INTERACTION1_RADIUS 8
-#define INTERACTION2_RADIUS 3
-#define INTERACTION3_RADIUS 5
-#define INTERACTION4_RADIUS 8
+
 #define ATTRACTION_STR 3
+#define INTERACTION1_RADIUS 8
+
 #define SEPARATION_STR 5
+#define INTERACTION2_RADIUS 3
+
 #define ALIGNMENT_STR 2
+#define INTERACTION3_RADIUS 5
+
 #define REPULSION_STR 8
+#define INTERACTION4_RADIUS 8
+
 #define COS_FOV 0
 
 struct Fish{
@@ -178,30 +185,6 @@ Fish* initFish(int number){
   }
 
   return fish;
-}
-
-void deviceMalloc(void** pointer, size_t size){
-  cudaError_t error = cudaMalloc(pointer, size);
-  if(error != cudaSuccess){
-    fprintf(stderr, "Failed to allocate device vector (error code %s)!\n", cudaGetErrorString(error));
-    exit(EXIT_FAILURE);
-  }
-}
-
-void deviceCopy(void* destination, const void* source, size_t size, cudaMemcpyKind kind){
-  cudaError_t error = cudaMemcpy(destination, source, size, kind);
-  if(error != cudaSuccess){
-    fprintf(stderr, "Failed to copy vector (error code %s)!\n", cudaGetErrorString(error));
-    exit(EXIT_FAILURE);
-  }
-}
-
-void deviceFree(void* pointer){
-  cudaError_t err = cudaFree(pointer);
-  if (err != cudaSuccess) {
-    fprintf(stderr, "Failed to free device vector (error code %s)!\n", cudaGetErrorString(err));
-    exit(EXIT_FAILURE);
-  }
 }
 
 void printVector(double* vector, size_t size){

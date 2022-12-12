@@ -126,10 +126,6 @@ void timerEvent(int value);
 // Cuda functionality
 void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource);
 
-///////////////////////////////////////////////////////////////////////////////
-//! Simple kernel to modify vertex positions in sine wave pattern
-//! @param data  data in global memory
-///////////////////////////////////////////////////////////////////////////////
 __global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -147,9 +143,6 @@ __global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
     pos[i] = make_float4(u, v, 0.0f, 1.0f);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-// Program main
-////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char **argv)
 {
 #if defined(__linux__)
@@ -183,9 +176,6 @@ void computeFPS()
     glutSetWindowTitle(fps);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Initialize GL
-////////////////////////////////////////////////////////////////////////////////
 bool initGL(int *argc, char **argv)
 {
     glutInit(argc, argv);
@@ -195,7 +185,7 @@ bool initGL(int *argc, char **argv)
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
     glutMotionFunc(motion);
-    glutTimerFunc(REFRESH_DELAY, timerEvent,0);
+    glutTimerFunc(REFRESH_DELAY, timerEvent, 0);
 
     // initialize necessary OpenGL extensions
     if (! isGLVersionSupported(2,0))
@@ -222,10 +212,6 @@ bool initGL(int *argc, char **argv)
     return true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-//! Run a simple test for CUDA
-////////////////////////////////////////////////////////////////////////////////
 bool runSimulation(int argc, char **argv)
 {
     // Create fps timer
@@ -262,9 +248,6 @@ bool runSimulation(int argc, char **argv)
     return true;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Run the Cuda part of the computation
-////////////////////////////////////////////////////////////////////////////////
 void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource)
 {
     // map OpenGL buffer object for writing from CUDA
@@ -280,9 +263,6 @@ void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource)
     checkCudaErrors(cudaGraphicsUnmapResources(1, vbo_resource, 0));
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Create VBO
-////////////////////////////////////////////////////////////////////////////////
 void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
                unsigned int vbo_res_flags)
 {
@@ -304,9 +284,6 @@ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
     SDK_CHECK_ERROR_GL();
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Delete VBO
-////////////////////////////////////////////////////////////////////////////////
 void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 {
     // unregister this buffer object with CUDA
@@ -318,9 +295,7 @@ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
     *vbo = 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Display callback
-////////////////////////////////////////////////////////////////////////////////
+// Display callback
 void display()
 {
     sdkStartTimer(&fps_timer);
@@ -382,9 +357,7 @@ void cleanup()
     freeFishes(out_fishes);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Keyboard events handler
-////////////////////////////////////////////////////////////////////////////////
+// Keyboard events handler
 void keyboard(unsigned char key, int /*x*/, int /*y*/)
 {
     switch (key)
@@ -395,9 +368,7 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
     }
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//! Mouse event handlers
-////////////////////////////////////////////////////////////////////////////////
+// Mouse event handlers
 void mouse(int button, int state, int x, int y)
 {
     if (state == GLUT_DOWN)
