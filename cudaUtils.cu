@@ -3,6 +3,9 @@
 #include <cuda_runtime.h>
 #include <math.h>
 
+#ifndef CUDAUTILS
+#define CUDAUTILS
+
 void deviceMalloc(void** pointer, size_t size){
 	cudaError_t error = cudaMalloc(pointer, size);
 	if(error != cudaSuccess){
@@ -26,3 +29,5 @@ void deviceFree(void* pointer){
 		exit(EXIT_FAILURE);
 	}
 }
+
+#endif

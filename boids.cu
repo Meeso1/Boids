@@ -3,6 +3,7 @@
 #include <cuda_runtime.h>
 #include <math.h>
 #include "cudaUtils.cu"
+#include "utils.cu"
 
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
@@ -10,31 +11,19 @@
 #define MIN_V 1
 #define MAX_V 10
 
-#define ATTRACTION_STR 3
+#define ATTRACTION_STR 0.3
 #define INTERACTION1_RADIUS 8
 
-#define SEPARATION_STR 5
+#define SEPARATION_STR 0.5
 #define INTERACTION2_RADIUS 3
 
-#define ALIGNMENT_STR 2
+#define ALIGNMENT_STR 0.2
 #define INTERACTION3_RADIUS 5
 
 #define REPULSION_STR 8
 #define INTERACTION4_RADIUS 8
 
 #define COS_FOV 0
-
-struct Fish{
-  double* x;
-  double* y;
-  double* vx;
-  double* vy;
-};
-
-struct Vector2{
-  double x;
-  double y;
-};
 
 __host__ __device__ double length(double x, double y){
   return sqrt(x*x + y*y);
@@ -185,36 +174,6 @@ Fish* initFish(int number){
   }
 
   return fish;
-}
-
-void printVector(double* vector, size_t size){
-  fprintf(stdout, "[");
-  for(int i = 0; i < size; i++){
-    fprintf(stdout, "%7.3f", vector[i]);
-    if(i != size - 1) fprintf(stdout, ", ");
-  }
-  fprintf(stdout, "]\n");
-}
-
-void printFrame(const Fish* fishes, int num_of_fishes, double time){
-  size_t vector_size = num_of_fishes*sizeof(double);
-  double* tmp = (double*)malloc(vector_size);
-
-  fprintf(stdout, "t = %6.3f:\n", time);
-
-  deviceCopy(tmp, fishes->x, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, num_of_fishes);
-
-  deviceCopy(tmp, fishes->y, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, num_of_fishes);
-
-  deviceCopy(tmp, fishes->vx, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, num_of_fishes);
-
-  deviceCopy(tmp, fishes->vy, vector_size, cudaMemcpyDeviceToHost);
-  printVector(tmp, num_of_fishes);
-
-  free(tmp);
 }
 
 void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int num_of_fishes){
