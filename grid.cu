@@ -85,7 +85,7 @@ __global__ void assignCells(double* x, double* y, int scene_size, double cell_si
 	cells[i] = getCellIndex(x[i], y[i], scene_size, cell_size);
 }
 
-__global__ void fill_starts(int* array, size_t length){
+__global__ void fillStarts(int* array, size_t length){
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 
 	if(i >= length){
@@ -103,7 +103,9 @@ __global__ void findCellStarts(int* sortedCells, int* starts, size_t length){
 	}
 
 	if(i == 0){
-		starts[0] = 0;
+		if(sortedCells[0] == 0){
+			starts[0] = 0;
+		}
 		return;
 	}
 
@@ -115,25 +117,30 @@ __global__ void findCellStarts(int* sortedCells, int* starts, size_t length){
 // NOTE: Points not in [0, scene_size] x [0, scene_size] will not be included in the grid and will be treated as if they have no neighbours
 Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x, double* y){
 	int res = getGridResolution(scene_size, cell_size);
-	printf("Grid resolution: %d\n", res);
+	DEBUG("Grid resolution: %d\n", res);
 
 	IndexesWithCells assignedCells;
 	deviceMalloc((void**)&assignedCells.indexes, num_of_points * sizeof(int));
 	deviceMalloc((void**)&assignedCells.cells, num_of_points * sizeof(int));
-	printf("Assigning cells...\n");
+	DEBUG("Assigning cells...\n");
 	assignCells<<<1, num_of_points>>>(x, y, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
-	printf("Cells assigned\n");
+	DEBUG("Cells assigned. result:\n");
+	IN_DEBUG(print_dev_int_array(assignedCells.indexes, num_of_points));
+	IN_DEBUG(print_dev_int_array(assignedCells.cells, num_of_points));
 
 	bitonic_sort_pairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
-	printf("Cells sorted\n");
+	DEBUG("Cells sorted. result:\n");
+	IN_DEBUG(print_dev_int_array(assignedCells.indexes, num_of_points));
+	IN_DEBUG(print_dev_int_array(assignedCells.cells, num_of_points));
 
 	int* cellStarts = NULL;
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
-	printf("%d cells created\n", numOfCells(res));
-	fill_starts<<<1, numOfCells(res)>>>(cellStarts, numOfCells(res));
-	printf("Cells filled\n");
+	DEBUG("%u cells created\n", (unsigned int)numOfCells(res));
+	fillStarts<<<1, numOfCells(res)>>>(cellStarts, numOfCells(res));
+	DEBUG("Cells filled\n");
 	findCellStarts<<<1, num_of_points>>>(assignedCells.cells, cellStarts, num_of_points);
-	printf("Cell starts found\n");
+	DEBUG("Cell starts found. result:\n");
+	IN_DEBUG(print_dev_int_array(cellStarts, numOfCells(res)));
 
 	Grid grid = {assignedCells, cellStarts, numOfCells(res), num_of_points};
 	return grid;
@@ -143,13 +150,13 @@ Grid copyToHost(Grid src){
 	Grid res;
 
 	res.indexes.indexes = (int*)malloc(src.numOfIndexes * sizeof(int));
-	deviceCopy(res.indexes.indexes, src.indexes.indexes, src.numOfIndexes, cudaMemcpyDeviceToHost);
+	deviceCopy(res.indexes.indexes, src.indexes.indexes, src.numOfIndexes * sizeof(int), cudaMemcpyDeviceToHost);
 
 	res.indexes.cells = (int*)malloc(src.numOfIndexes * sizeof(int));
-	deviceCopy(res.indexes.cells, src.indexes.cells, src.numOfIndexes, cudaMemcpyDeviceToHost);
+	deviceCopy(res.indexes.cells, src.indexes.cells, src.numOfIndexes * sizeof(int), cudaMemcpyDeviceToHost);
 
 	res.cellStarts = (int*)malloc(src.numOfCells * sizeof(int));
-	deviceCopy(res.cellStarts, src.cellStarts, src.numOfCells, cudaMemcpyDeviceToHost);
+	deviceCopy(res.cellStarts, src.cellStarts, src.numOfCells * sizeof(int), cudaMemcpyDeviceToHost);
 
 	res.numOfCells = src.numOfCells;
 	res.numOfIndexes = src.numOfIndexes;

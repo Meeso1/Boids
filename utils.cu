@@ -8,6 +8,14 @@
 #ifndef UTILS
 #define UTILS
 
+#ifndef DEBUG_MSG
+#define DEBUG_MSG 0
+#endif
+
+#define DEBUG(...) if(DEBUG_MSG != 0) printf(__VA_ARGS__)
+#define IN_DEBUG(expr) if(DEBUG_MSG != 0) do{expr;}while(0)
+#define B(i) DEBUG("[%2d]======>\n", i)
+
 struct Fish{
 	double* x;
 	double* y;
@@ -42,8 +50,7 @@ void print_double_array(double* vector, size_t size){
 
 void print_dev_int_array(int* dev_array, size_t size){
 	int* tmp = (int*)malloc(size*sizeof(int));
-	if(tmp == NULL) printf("malloc failed \n");
-	printf("[%x]: ", dev_array);
+	printf("[%p]: ", dev_array);
 	deviceCopy(tmp, dev_array, size*sizeof(int), cudaMemcpyDeviceToHost);
 	print_int_array(tmp, size);
 	free(tmp);
