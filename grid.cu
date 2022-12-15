@@ -17,6 +17,9 @@ struct Grid{
 	int* cellStarts;
 	size_t numOfCells;
 	size_t numOfIndexes;
+	size_t resolution;
+	int gridSize;
+	double cellSize;
 };
 
 __device__ __host__ size_t getGridResolution(int scene_size, double cell_size){
@@ -49,7 +52,7 @@ __device__ __host__ int getCellIndex(double x, double y, int scene_size, double 
 }
 
 __host__ int* getNeighbourCellsIndexesHost(int cell_index, size_t res){
-	int num_of_neighbours = 8;
+	int num_of_neighbours = 9;
 	int* neighbours = (int*)malloc(num_of_neighbours * sizeof(int));
 
 	int x_id = cell_index % res;
@@ -64,7 +67,7 @@ __host__ int* getNeighbourCellsIndexesHost(int cell_index, size_t res){
 	return neighbours;
 }
 
-__device__ void getNeighbourCellsIndexesDevice(int cell_index, size_t res, int* out /*must have length = 8*/){
+__device__ void getNeighbourCellsIndexesDevice(int cell_index, size_t res, int* out /*must have length = 9*/){
 	int x_id = cell_index % res;
 	int y_id = cell_index / res;
 
@@ -142,7 +145,15 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	DEBUG("Cell starts found. result:\n");
 	IN_DEBUG(print_dev_int_array(cellStarts, numOfCells(res)));
 
-	Grid grid = {assignedCells, cellStarts, numOfCells(res), num_of_points};
+	Grid grid = {
+		assignedCells, 
+		cellStarts, 
+		numOfCells(res), 
+		num_of_points,
+		res,
+		scene_size,
+		cell_size
+	};
 	return grid;
 }
 
@@ -160,6 +171,9 @@ Grid copyToHost(Grid src){
 
 	res.numOfCells = src.numOfCells;
 	res.numOfIndexes = src.numOfIndexes;
+	res.resolution = src.resolution;
+	res.gridSize = src.gridSize;
+	res.cellSize = src.cellSize;
 
 	return res;
 }

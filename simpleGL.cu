@@ -102,6 +102,7 @@ unsigned int frameCount = 0;
 #define DT 0.01
 Fish* in_fishes;
 Fish* out_fishes;
+int* neighbour_cell_buffer;
 
 #define BOID_SIZE 0.02
 
@@ -245,7 +246,7 @@ bool runSimulation(int argc, char **argv)
     // create VBO
     createVBO(&vbo, &cuda_vbo_resource, cudaGraphicsMapFlagsWriteDiscard);
 
-    initSimulation(&in_fishes, &out_fishes, NUM_OF_BOIDS);
+    initSimulation(&in_fishes, &out_fishes, &neighbour_cell_buffer, NUM_OF_BOIDS);
 
     // run the cuda part
     copyFishesToVbo(&cuda_vbo_resource);
@@ -309,7 +310,7 @@ void display()
     sdkStartTimer(&fps_timer);
 
     // run CUDA kernel to generate vertex positions
-    advance(in_fishes, out_fishes, NUM_OF_BOIDS, DT);
+    advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, DT);
     copyFishesToVbo(&cuda_vbo_resource);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -363,6 +364,7 @@ void cleanup()
 
     freeFishes(in_fishes);
     freeFishes(out_fishes);
+    deviceFree(neighbour_cell_buffer);
 }
 
 // Keyboard events handler

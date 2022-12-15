@@ -4,6 +4,7 @@
 #include <math.h>
 #include "cudaUtils.cu"
 #include "utils.cu"
+#include "grid.cu"
 
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
@@ -24,6 +25,16 @@
 #define INTERACTION4_RADIUS 8
 
 #define COS_FOV 0
+#define CELL_SIZE MAX(MAX(INTERACTION1_RADIUS, INTERACTION2_RADIUS), INTERACTION3_RADIUS)
+
+// Used to store data used in boid rules
+struct FishUpdateData{
+  Vector2 center;
+  int attractionNeighbours;
+  Vector2 separation;
+  Vector2 vSum;
+  int alignmentNeighbours;
+};
 
 __host__ __device__ double length(double x, double y){
   return sqrt(x*x + y*y);
@@ -55,94 +66,126 @@ __device__ bool is_in_front(Vector2 fish, Vector2 other, Vector2 v, double cos_f
   return cos_r_v >= cos_fov;
 }
 
-__global__ void updateFish(const Fish in, Fish out, double dt, int numElements) {
+__device__ void updateAttraction(const Fish fish, int current, int other, double distance, FishUpdateData* data){
+  if(distance > INTERACTION1_RADIUS) return;
+  if(!is_in_front(
+    {fish.x[current], fish.y[current]}, 
+    {fish.x[other], fish.y[other]}, 
+    {fish.vx[current], fish.vy[current]}, 
+    COS_FOV)
+  ) return;
+
+  data->center.x += fish.x[other];
+  data->center.y += fish.y[other];
+  data->attractionNeighbours++;
+}
+
+__device__ void updateSeparation(const Fish fish, int current, int other, double distance, FishUpdateData* data){
+  if(distance > INTERACTION2_RADIUS) return;
+  if(!is_in_front(
+    {fish.x[current], fish.y[current]}, 
+    {fish.x[other], fish.y[other]}, 
+    {fish.vx[current], fish.vy[current]}, 
+    COS_FOV)
+  ) return;
+
+  data->separation.x -= fish.x[other] - fish.x[current];
+  data->separation.y -= fish.y[other] - fish.y[current];
+}
+
+__device__ void updateAlignment(const Fish fish, int current, int other, double distance, FishUpdateData* data){
+  if(distance > INTERACTION3_RADIUS) return;
+  if(!is_in_front(
+    {fish.x[current], fish.y[current]}, 
+    {fish.x[other], fish.y[other]}, 
+    {fish.vx[current], fish.vy[current]}, 
+    COS_FOV)
+  ) return;
+
+  data->vSum.x += fish.vx[other];
+  data->vSum.y += fish.vy[other];
+  data->alignmentNeighbours++;
+}
+
+__device__ Vector2 getAvoidanceDv(const Fish fish, int current){
+  Vector2 dv = {0, 0};
+  if(fish.x[current] < INTERACTION4_RADIUS){
+    dv.x = (INTERACTION4_RADIUS - fish.x[current]) * REPULSION_STR;
+  }
+  else if(fish.x[current] > SCENE_SIZE - INTERACTION4_RADIUS){
+    dv.x = - (fish.x[current] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+  }
+
+  if(fish.y[current] < INTERACTION4_RADIUS){
+    dv.y = (INTERACTION4_RADIUS - fish.y[current]) * REPULSION_STR;
+  }
+  else if(fish.y[current] > SCENE_SIZE - INTERACTION4_RADIUS){
+    dv.y = - (fish.y[current] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
+  }
+
+  return dv;
+}
+
+__device__ Vector2 get_dv(const Fish fish, int current, FishUpdateData* data){
+  Vector2 v1 = {0, 0};
+  if(data->attractionNeighbours != 0){
+    v1.x = (data->center.x / data->attractionNeighbours - fish.x[current]) * ATTRACTION_STR;
+    v1.y = (data->center.y / data->attractionNeighbours - fish.y[current]) * ATTRACTION_STR;
+  }
+
+  Vector2 v2 = {data->separation.x * SEPARATION_STR, data->separation.y * SEPARATION_STR};
+
+  Vector2 v3 = {0, 0};
+  if(data->alignmentNeighbours != 0){
+    v3 = {
+      data->vSum.x / data->alignmentNeighbours - fish.vx[current], 
+      data->vSum.y / data->alignmentNeighbours - fish.vy[current]
+    };
+    v3.x *= ALIGNMENT_STR;
+    v3.y *= ALIGNMENT_STR;
+  }
+
+  Vector2 v4 = getAvoidanceDv(fish, current);
+
+  return {v1.x + v2.x + v3.x + v4.x, v1.y + v2.y + v3.y + v4.y};
+}
+
+__global__ void updateFish(const Fish in, Fish out, Grid grid, int* neighbour_cells, double dt, int numElements) {
   int i = blockDim.x * blockIdx.x + threadIdx.x;
 
   if(i >= numElements){
     return;
   }
 
-  // Rule 1: Attraction
-  Vector2 center = {0, 0};
-  int rule1Neighbours = 0;
-  for(int k = 0; k < numElements; k++){
-    if(k == i) continue;
+  FishUpdateData data = {{0, 0}, 0, {0, 0}, {0, 0}, 0};
+  int cell_index = getCellIndex(in.x[i], in.y[i], grid.gridSize, grid.cellSize);
+  for(int k = 0; k < 9; k++){
+    int cell = neighbour_cells[9*cell_index + k];
+    if(cell == -1){
+      // no such cell
+      continue;
+    }
 
-    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
-    if(distance > INTERACTION1_RADIUS) continue;
+    int index = grid.cellStarts[cell];
+    if(index == -1){
+      // cell is empty
+      continue;
+    }
 
-    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
+    while(index < grid.numOfIndexes && grid.indexes.cells[index] == cell){
+      if(index == i) continue;
 
-    center.x += in.x[k];
-    center.y += in.y[k];
-    rule1Neighbours++;
+      // process neighbour
+      double distance = length(in.x[i] - in.x[index], in.y[i] - in.y[index]);
+      updateAttraction(in, i, index, distance, &data);
+      updateSeparation(in, i, index, distance, &data);
+      updateAlignment(in, i, index, distance, &data);
+
+      index++;
+    }
   }
 
-  Vector2 v1 = {0, 0};
-  if(rule1Neighbours != 0){
-    center.x /= rule1Neighbours;
-    center.y /= rule1Neighbours;
-
-    v1.x = (center.x - in.x[i]) * ATTRACTION_STR;
-    v1.y = (center.y - in.y[i]) * ATTRACTION_STR;
-  }
-
-  // Rule 2: Separation
-  Vector2 sep = {0, 0};
-  for(int k = 0; k < numElements; k++){
-    if(k == i) continue;
-
-    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
-    if(distance > INTERACTION2_RADIUS) continue;
-
-    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
-
-    sep.x -= in.x[k] - in.x[i];
-    sep.y -= in.y[k] - in.y[i];
-  }
-
-  Vector2 v2 = {sep.x * SEPARATION_STR, sep.y * SEPARATION_STR};
-
-  // Rule 3: Alignment
-  Vector2 v_sum = {0, 0};
-  int rule3Neighbours = 0;
-  for(int k = 0; k < numElements; k++){
-    if(k == i) continue;
-
-    double distance = length(in.x[i] - in.x[k], in.y[i] - in.y[k]);
-    if(distance > INTERACTION1_RADIUS) continue;
-
-    if(!is_in_front({in.x[i], in.y[i]}, {in.x[k], in.y[k]}, {in.vx[i], in.vy[i]}, COS_FOV)) continue;
-
-    v_sum.x += in.vx[k];
-    v_sum.y += in.vy[k];
-    rule3Neighbours++;
-  }
-
-  Vector2 v3 = {0, 0};
-  if(rule3Neighbours != 0){
-    v3 = {v_sum.x / rule3Neighbours - in.vx[i], v_sum.y / rule3Neighbours - in.vy[i]};
-    v3.x *= ALIGNMENT_STR;
-    v3.y *= ALIGNMENT_STR;
-  }
-
-  // Rule 4: Avoidance
-  Vector2 v4 = {0, 0};
-  if(in.x[i] < INTERACTION4_RADIUS){
-    v4.x = (INTERACTION4_RADIUS - in.x[i]) * REPULSION_STR;
-  }
-  else if(in.x[i] > SCENE_SIZE - INTERACTION4_RADIUS){
-    v4.x = - (in.x[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
-  }
-
-  if(in.y[i] < INTERACTION4_RADIUS){
-    v4.y = (INTERACTION4_RADIUS - in.y[i]) * REPULSION_STR;
-  }
-  else if(in.y[i] > SCENE_SIZE - INTERACTION4_RADIUS){
-    v4.y = - (in.y[i] - SCENE_SIZE + INTERACTION4_RADIUS) * REPULSION_STR;
-  }
-
-  Vector2 dv = {v1.x + v2.x + v3.x + v4.x, v1.y + v2.y + v3.y + v4.y};
+  Vector2 dv = get_dv(in, i, &data);
   out.vx[i] = in.vx[i] + dv.x;
   out.vy[i] = in.vy[i] + dv.y;
 
@@ -150,6 +193,16 @@ __global__ void updateFish(const Fish in, Fish out, double dt, int numElements) 
 
   out.x[i] = in.x[i] + out.vx[i] * dt;
   out.y[i] = in.y[i] + out.vy[i] * dt;
+}
+
+__global__ void fillNeighbourCellBuffer(int* buffer, int num_of_cells, size_t resolution){
+  int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+  if(i >= num_of_cells){
+    return;
+  }
+
+  getNeighbourCellsIndexesDevice(i, resolution, &(buffer[9*i]));
 }
 
 Fish* initFish(int number){
@@ -176,7 +229,7 @@ Fish* initFish(int number){
   return fish;
 }
 
-void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int num_of_fishes){
+void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** device_neighbour_buff, int num_of_fishes){
   Fish* fish = initFish(num_of_fishes);
   size_t vector_size = num_of_fishes*sizeof(double);
 
@@ -208,6 +261,14 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int num_o
   deviceCopy(d_in_fish->vx, fish->vx, vector_size, cudaMemcpyHostToDevice);
   deviceCopy(d_in_fish->vy, fish->vy, vector_size, cudaMemcpyHostToDevice);
 
+  // Allocate neighbour cell buffer
+  int res = getGridResolution(SCENE_SIZE, CELL_SIZE);
+  int num_of_cells = numOfCells(res);
+  *device_neighbour_buff = NULL;
+  deviceMalloc((void**) &device_neighbour_buff, 9*num_of_cells*sizeof(int));
+  // Fill it with neighbour indexes, as grid is static and they won't change
+  fillNeighbourCellBuffer<<<1, num_of_cells>>>(*device_neighbour_buff, num_of_cells, res);
+
   *device_in_fishes = d_in_fish;
   *device_out_fishes = d_out_fish;
 
@@ -233,9 +294,12 @@ void freeFishes(Fish* fishes){
   deviceFree(fishes->vy);
 }
 
-void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, double dt){
+void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbour_buff, double dt){
+  // Make adjacency grid
+  Grid grid = makeGrid(SCENE_SIZE, CELL_SIZE, num_of_fishes, in_fishes->x, in_fishes->y);
+
   // Launch CUDA Kernel
-  updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, dt, num_of_fishes);
+  updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, grid, neighbour_buff, dt, num_of_fishes);
 
   // Check errors
   cudaError_t err = cudaGetLastError();

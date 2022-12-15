@@ -54,7 +54,7 @@ int main(){
 	for(int i = 0; i < length; i++){
 		int* neighbour_cells = getNeighbourCellsIndexesHost(getCellIndex(x[i], y[i], grid_size, cell_size), getGridResolution(grid_size, cell_size));
 		printf("[%3d](%4.1f, %4.1f): ", i, x[i], y[i]);
-		for(int k = 0; k < 8; k++){
+		for(int k = 0; k < 9; k++){
 			int cell = neighbour_cells[k];
 			if(cell == -1) {
 				continue; // No such cell
