@@ -132,6 +132,9 @@ __device__ void updateAttraction(const Fish fish, int current, int other, double
     get_v(fish, current),
     COS_FOV)
   ) return;
+  #ifdef TYPES
+  if(fish.type[current] != fish.type[other]) return;
+  #endif
 
   data->center.x += fish.x[other];
   data->center.y += fish.y[other];
@@ -165,6 +168,9 @@ __device__ void updateAlignment(const Fish fish, int current, int other, double 
     get_v(fish, current),
     COS_FOV)
   ) return;
+  #ifdef TYPES
+  if(fish.type[current] != fish.type[other]) return;
+  #endif
 
   data->vSum.x += fish.vx[other];
   data->vSum.y += fish.vy[other];
@@ -256,33 +262,35 @@ __global__ void updateFish(const Fish in, Fish out, Grid grid, int* neighbour_ce
   int cell_index = getCellIndex(in.x[i], in.y[i], grid.gridSize, grid.cellSize);
   #endif
   
-  for(int k = 0; k < NUM_OF_NEIGHBOURS; k++){
-    int cell = neighbour_cells[NUM_OF_NEIGHBOURS*cell_index + k];
-    if(cell == -1){
-      // no such cell
-      continue;
-    }
+  if(cell_index != -1){
+    for(int k = 0; k < NUM_OF_NEIGHBOURS; k++){
+      int cell = neighbour_cells[NUM_OF_NEIGHBOURS*cell_index + k];
+      if(cell == -1){
+        // no such cell
+        continue;
+      }
 
-    int index = grid.cellStarts[cell];
-    if(index == -1){
-      // cell is empty
-      continue;
-    }
+      int index = grid.cellStarts[cell];
+      if(index == -1){
+        // cell is empty
+        continue;
+      }
 
-    while(index < grid.numOfIndexes && grid.indexes.cells[index] == cell){
-      if(index == i) continue;
+      while(index < grid.numOfIndexes && grid.indexes.cells[index] == cell){
+        if(index == i) continue;
 
-      // process neighbour
-      #ifdef USE_3D
-      double distance = length(in.x[i] - in.x[index], in.y[i] - in.y[index], in.z[i] - in.z[index]);
-      #else
-      double distance = length(in.x[i] - in.x[index], in.y[i] - in.y[index]);
-      #endif
-      updateAttraction(in, i, index, distance, &data);
-      updateSeparation(in, i, index, distance, &data);
-      updateAlignment(in, i, index, distance, &data);
+        // process neighbour
+        #ifdef USE_3D
+        double distance = length(in.x[i] - in.x[index], in.y[i] - in.y[index], in.z[i] - in.z[index]);
+        #else
+        double distance = length(in.x[i] - in.x[index], in.y[i] - in.y[index]);
+        #endif
+        updateAttraction(in, i, index, distance, &data);
+        updateSeparation(in, i, index, distance, &data);
+        updateAlignment(in, i, index, distance, &data);
 
-      index++;
+        index++;
+      }
     }
   }
 
@@ -329,6 +337,9 @@ Fish* initFish(int number){
   fish->z = (double*)malloc(number*sizeof(double));
   fish->vz = (double*)malloc(number*sizeof(double));
   #endif
+  #ifdef TYPES
+  fish->type = (int*)malloc(number*sizeof(int));
+  #endif
 
   for(int i = 0; i < number; i++){
     fish->x[i]  = (rand() % (SCENE_SIZE * 100)) / 100.0;
@@ -350,6 +361,10 @@ Fish* initFish(int number){
       fish->vy[i] = (rand() % (2 * MAX_V * 100)) / 100.0 - MAX_V;
       clip_speed(MIN_V, MAX_V, &(fish->vx[i]), &(fish->vy[i]));
     }while(fish->vx[i] * fish->vy[i] == 0);
+    #endif
+
+    #ifdef TYPES
+    fish->type[i] = rand() % TYPES;
     #endif
   }
 
@@ -374,6 +389,11 @@ Fish* allocateFish(size_t num){
   deviceMalloc((void**) &(fish->vz), vector_size);
   #endif
 
+  #ifdef TYPES
+  fish->type = NULL;
+  deviceMalloc((void**) &(fish->type), num*sizeof(int));
+  #endif
+
   return fish;
 }
 
@@ -385,6 +405,9 @@ void freeHostFishes(Fish* fishes){
   #ifdef USE_3D
   free(fishes->z);
   free(fishes->vz);
+  #endif
+  #ifdef TYPES
+  free(fish->type);
   #endif
   free(fishes);
 }
@@ -405,6 +428,9 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** dev
   #ifdef USE_3D
   deviceCopy(d_in_fish->z, fish->z, vector_size, cudaMemcpyHostToDevice);
   deviceCopy(d_in_fish->vz, fish->vz, vector_size, cudaMemcpyHostToDevice);
+  #endif
+  #ifdef TYPES
+  deviceCopy(d_in_fish->type, fish->type, num_of_fishes*sizeof(int), cudaMemcpyHostToDevice);
   #endif
 
   // Allocate neighbour cell buffer

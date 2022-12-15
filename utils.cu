@@ -31,6 +31,9 @@ struct Fish{
 	double* z;
 	double* vz;
 	#endif
+	#ifdef TYPES
+	int type;
+	#endif
 };
 
 struct Vector{

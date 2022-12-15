@@ -1,7 +1,8 @@
 #define DEBUG_MSG 1
 #include "grid.cu"
+#include "testUtils.cu"
 
-int main(){
+void manual_test(){
 	int grid_size = 50;
 	int cell_size = 5;
 	size_t length = 34;
@@ -25,7 +26,7 @@ int main(){
 	printf("Grid copied\n");
 
 	printf("RAW GRID DATA:\n");
-	printf("%d indexes, %d cells\n", grid.numOfIndexes, grid.numOfCells);
+	printf("%zu indexes, %zu cells\n", grid.numOfIndexes, grid.numOfCells);
 	printf("IDS:    ");
 	print_int_array(grid.indexes.indexes, grid.numOfIndexes);
 	printf("CELLS:  ");
@@ -70,4 +71,78 @@ int main(){
 		}
 		printf("\n");
 	}
+}
+
+void test_2d(){
+	int grid_size = 100;
+	int cell_size = 10;
+	size_t length = 9;
+	double x[] = {-1, 5, 5,  15, 15, 25, 45, 75, 85};
+	double y[] = { 5, 5, 15, 5,  15, 25, 55, 85, 85};
+	int res = 0;
+
+	int resolution = getGridResolution(grid_size, cell_size);
+	res += int_should_equal(resolution, 10);
+	int test_index_1 = getCellIndexFrom2dIndexes(2, 3, resolution);
+	res += int_should_equal(test_index_1, 32);
+	int test_index_2 = getCellIndex(14, 41, grid_size, cell_size);
+	res += int_should_equal(test_index_2, 41);
+
+	double* d_x = NULL;
+	double* d_y = NULL;
+	deviceMalloc((void**)&d_x, length*sizeof(double)); 
+	deviceMalloc((void**)&d_y, length*sizeof(double)); 
+	deviceCopy(d_x, x, length*sizeof(double), cudaMemcpyHostToDevice);
+	deviceCopy(d_y, y, length*sizeof(double), cudaMemcpyHostToDevice);
+
+	Grid grid = copyToHost(makeGrid(grid_size, cell_size, length, d_x, d_y));
+
+	int ids_exp[] = {0, 1, 3, 2, 4, 5, 6, 7, 8};
+	int cells_exp[] = {-1, 0, 1, 10, 11, 22, 54, 87, 88};
+
+	int* starts_exp = (int*)malloc(100*sizeof(int));
+	for(int i = 0; i < 100; i++){
+		starts_exp[i] = -1;
+	}
+	for(int i = 0; i < length; i++){
+		if(cells_exp[i] == -1) continue;
+		if(starts_exp[cells_exp[i]] == -1) starts_exp[cells_exp[i]] = i;
+	}
+
+	res += int_should_equal(grid.numOfIndexes, length);
+	res += int_should_equal(grid.numOfCells, 100);
+	res += int_array_should_equal(grid.indexes.indexes, ids_exp, grid.numOfIndexes);
+	res += int_array_should_equal(grid.indexes.cells, cells_exp, grid.numOfIndexes);
+	res += int_array_should_equal(grid.cellStarts, starts_exp, grid.numOfCells);
+
+	int index = grid.cellStarts[10];
+	while(index < grid.numOfIndexes && grid.indexes.cells[index] == 10){
+		index++;
+	}
+	res += int_should_equal(index, grid.cellStarts[10] + 1);
+
+	int* neighbour_cells = getNeighbourCellsIndexesHost(getCellIndex(x[1], y[1], grid_size, cell_size), resolution);
+	int count = 0;
+	for(int k = 0; k < 9; k++){
+		int cell = neighbour_cells[k];
+		if(cell == -1) {
+			continue; // No such cell
+		}
+		int index = grid.cellStarts[cell];
+		if(index == -1){
+			continue; // Cell is empty
+		} 
+		while(index < grid.numOfIndexes && grid.indexes.cells[index] == cell){
+			count++;
+			index++;
+		}
+	}
+	res += int_should_equal(count, 4);
+
+	printf(res == 0 ? "PASSED\n" : "FAILED\n");
+}
+
+int main(){
+	test_2d();
+	return 0;
 }
