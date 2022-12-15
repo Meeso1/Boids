@@ -68,6 +68,7 @@
 #include <vector_types.h>
 
 #define AS_INCLUDE
+#define USE_3D
 #include "boids.cu"
 
 #define REFRESH_DELAY     1 //ms
@@ -138,18 +139,39 @@ __global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
 
     // scale to [-1, 1]
     float u = (float)fishes.x[i] / SCENE_SIZE;
-    float v = (float)fishes.y[i] / SCENE_SIZE;
     u = u*2.0f - 1.0f;
+    float v = (float)fishes.y[i] / SCENE_SIZE;
     v = v*2.0f - 1.0f;
+    float w = 0;
+    #ifdef USE_3D
+    w = (float)fishes.z[i] / SCENE_SIZE;
+    w = w*2.0f - 1.0f;
+    #endif
 
+    #ifdef USE_3D
+    float len_v = (float)length(fishes.vx[i], fishes.vy[i], fishes.vz[i]);
+    #else
     float len_v = (float)length(fishes.vx[i], fishes.vy[i]);
+    #endif
+
     float dx = fishes.vx[i] / len_v * BOID_SIZE;
     float dy = fishes.vy[i] / len_v * BOID_SIZE;
+    float dz = 0;
+    #ifdef USE_3D
+    dz = fishes.vz[i] / len_v * BOID_SIZE;
+    #endif
 
     // write output vertices
-    pos[3*i]     = make_float4(u + dx, v + dy, 0.0f, 1.0f);
-    pos[3*i + 1] = make_float4(u - dy/3, v + dx/3, 0.0f, 1.0f);
-    pos[3*i + 2] = make_float4(u + dy/3, v - dx/3, 0.0f, 1.0f);
+    if(dx * dy == 0){
+        pos[3*i]     = make_float4(u + dx, v + dy, w + dz, 1.0f);
+        pos[3*i + 1] = make_float4(u - BOID_SIZE/3, v, w, 1.0f);
+        pos[3*i + 2] = make_float4(u + BOID_SIZE/3, v, w, 1.0f);
+    }
+    else{
+        pos[3*i]     = make_float4(u + dx, v + dy, w + dz, 1.0f);
+        pos[3*i + 1] = make_float4(u - dy/3, v + dx/3, w, 1.0f);
+        pos[3*i + 2] = make_float4(u + dy/3, v - dx/3, w, 1.0f);
+    }
 }
 
 int main(int argc, char **argv)

@@ -16,16 +16,29 @@
 #define IN_DEBUG(expr) if(DEBUG_MSG != 0) do{expr;}while(0)
 #define B(i) DEBUG("[%2d]======>\n", i)
 
+#ifdef USE_3D
+#define VECT_0 {0, 0, 0}
+#else
+#define VECT_0 {0, 0}
+#endif
+
 struct Fish{
 	double* x;
 	double* y;
 	double* vx;
 	double* vy;
+	#ifdef USE_3D
+	double* z;
+	double* vz;
+	#endif
 };
 
-struct Vector2{
+struct Vector{
 	double x;
 	double y;
+	#ifdef USE_3D
+	double z;
+	#endif
 };
 
 void print_int_array(int* array, size_t length){
@@ -68,11 +81,21 @@ void printFrame(const Fish* fishes, int num_of_fishes, double time){
 	deviceCopy(tmp, fishes->y, vector_size, cudaMemcpyDeviceToHost);
 	print_double_array(tmp, num_of_fishes);
 
+	#ifdef USE_3D
+	deviceCopy(tmp, fishes->z, vector_size, cudaMemcpyDeviceToHost);
+	print_double_array(tmp, num_of_fishes);
+	#endif
+
 	deviceCopy(tmp, fishes->vx, vector_size, cudaMemcpyDeviceToHost);
 	print_double_array(tmp, num_of_fishes);
 
 	deviceCopy(tmp, fishes->vy, vector_size, cudaMemcpyDeviceToHost);
 	print_double_array(tmp, num_of_fishes);
+
+	#ifdef USE_3D
+	deviceCopy(tmp, fishes->vz, vector_size, cudaMemcpyDeviceToHost);
+	print_double_array(tmp, num_of_fishes);
+	#endif
 
 	free(tmp);
 }
