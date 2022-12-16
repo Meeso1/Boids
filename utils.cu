@@ -15,6 +15,7 @@
 #define DEBUG(...) if(DEBUG_MSG != 0) printf(__VA_ARGS__)
 #define IN_DEBUG(expr) if(DEBUG_MSG != 0) do{expr;}while(0)
 #define B(i) DEBUG("[%2d]======>\n", i)
+#define T(s) DEBUG("[%s]\n", s)
 
 #ifdef USE_3D
 #define VECT_0 {0, 0, 0}

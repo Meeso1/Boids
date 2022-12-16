@@ -168,6 +168,7 @@ void bitonic_sort_pairs_pow2(int* keys, int* values, size_t length)
     /* Minor step */
     for (j=k>>1; j>0; j=j>>1) {
       bitonic_sort_pairs_step<<<blocks, threads>>>(keys, values, j, k);
+      deviceCheckErrors("bitonic_sort_pairs_step");
     }
   }
 }
@@ -188,20 +189,25 @@ key_val_buffer create_pairs_buffer(int* keys, int* values, size_t pairs_length, 
     dim3 blocks(len_to_fill > 64 ? 64 : 1, 1);
     dim3 threads(len_to_fill > 64 ? len_to_fill / 64 : len_to_fill, 1);
     fill_pairs<<<blocks, threads>>>(buf_keys, buf_vals, pairs_length, buffer_length, fill_key, fill_value);
+    deviceCheckErrors("fill_pairs");
   }
 
   buffer.keys = buf_keys;
   buffer.values = buf_vals;
 
+  DEBUG("Allocated buffer at %p and %p\n", buffer.keys, buffer.values);
   return buffer;
 }
 
 void bitonic_sort_pairs(int* keys, int* values, size_t length, int max_key, bool src_is_device){
   size_t valid_size = next_pow_2(length);
+  T("sort: fill_pairs_buffer()");
   key_val_buffer buffer = create_pairs_buffer(keys, values, length, valid_size, max_key, -1, src_is_device);
 
+  T("sort: bitonic_sort_pairs_pow2()");
   bitonic_sort_pairs_pow2(buffer.keys, buffer.values, valid_size);
 
+  T("sort: deviceCopy()");
   deviceCopy(keys, buffer.keys, length * sizeof(int), src_is_device ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost);
   deviceCopy(values, buffer.values, length * sizeof(int), src_is_device ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost);
   deviceFree(buffer.keys);

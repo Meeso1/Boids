@@ -420,6 +420,8 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** dev
   Fish* d_in_fish = allocateFish(num_of_fishes);
   Fish* d_out_fish = allocateFish(num_of_fishes);
 
+  T("deviceCopy()");
+
   // Copy to input vector
   deviceCopy(d_in_fish->x, fish->x, vector_size, cudaMemcpyHostToDevice);
   deviceCopy(d_in_fish->vx, fish->vx, vector_size, cudaMemcpyHostToDevice);
@@ -437,7 +439,9 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** dev
   int res = getGridResolution(SCENE_SIZE, CELL_SIZE);
   int num_of_cells = numOfCells(res);
   *device_neighbour_buff = NULL;
-  deviceMalloc((void**) &device_neighbour_buff, NUM_OF_NEIGHBOURS*num_of_cells*sizeof(int));
+  deviceMalloc((void**) device_neighbour_buff, NUM_OF_NEIGHBOURS*num_of_cells*sizeof(int));
+
+  T("fillNeighbourCellBuffer()");
   
   // Fill it with neighbour indexes, as grid is static and they won't change
   fillNeighbourCellBuffer<<<1, num_of_cells>>>(*device_neighbour_buff, num_of_cells, res);
@@ -445,6 +449,7 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** dev
   *device_in_fishes = d_in_fish;
   *device_out_fishes = d_out_fish;
 
+  T("freeHostFishes()");
   freeHostFishes(fish);
 }
 
@@ -471,7 +476,7 @@ void freeFishes(Fish* fishes){
   #endif
 }
 
-void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbour_buff, double dt){
+void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbour_buff, double dt, Grid_buffers buffers, key_val_buffer pairs_buf){
   // Make adjacency grid
   #ifdef USE_3D
   Grid grid = makeGrid(SCENE_SIZE, CELL_SIZE, num_of_fishes, in_fishes->x, in_fishes->y, in_fishes->z);
@@ -479,16 +484,16 @@ void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbou
   Grid grid = makeGrid(SCENE_SIZE, CELL_SIZE, num_of_fishes, in_fishes->x, in_fishes->y);
   #endif
 
+  T("updateFish()");
+
   // Launch CUDA Kernel
   updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, grid, neighbour_buff, dt, num_of_fishes);
+  deviceCheckErrors("updateFish");
 
-  // Check errors
-  cudaError_t err = cudaGetLastError();
-  if (err != cudaSuccess) {
-    fprintf(stderr, "Failed to launch kernel (error code %s)!\n", cudaGetErrorString(err));
-    exit(EXIT_FAILURE);
-  }
+  T("freeGrid()");
+  freeGrid(grid);
 
+  T("copyFishes()");
   copyFishes(in_fishes, out_fishes, num_of_fishes);
 }
 
