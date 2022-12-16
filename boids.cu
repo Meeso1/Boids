@@ -490,7 +490,6 @@ void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbou
   updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, grid, neighbour_buff, dt, num_of_fishes);
   deviceCheckErrors("updateFish");
 
-  T("freeGrid()");
   freeGrid(grid);
 
   T("copyFishes()");

@@ -8,6 +8,7 @@
 
 void deviceMalloc(void** pointer, size_t size){
 	cudaError_t error = cudaMalloc(pointer, size);
+	printf("	malloc (%p)\n", *pointer);
 	if(error != cudaSuccess){
 		fprintf(stderr, "Failed to allocate device vector (error code: %s)\n", cudaGetErrorString(error));
 		exit(EXIT_FAILURE);
@@ -23,7 +24,9 @@ void deviceCopy(void* destination, const void* source, size_t size, cudaMemcpyKi
 }
 
 void deviceFree(void* pointer){
+	printf("	free   (%p", pointer);
 	cudaError_t err = cudaFree(pointer);
+	printf(")\n");
 	if (err != cudaSuccess) {
 		fprintf(stderr, "Failed to free device vector (error code: %s)\n", cudaGetErrorString(err));
 		exit(EXIT_FAILURE);

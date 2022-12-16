@@ -264,6 +264,7 @@ Grid copyToHost(Grid src){
 }
 
 void freeGrid(Grid grid){
+	T("grid: freeGrid()");
 	deviceFree(grid.indexes.indexes);
 	deviceFree(grid.indexes.cells);
 	deviceFree(grid.cellStarts);
