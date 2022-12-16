@@ -476,7 +476,7 @@ void freeFishes(Fish* fishes){
   #endif
 }
 
-void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbour_buff, double dt, Grid_buffers buffers, key_val_buffer pairs_buf){
+void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbour_buff, double dt){
   // Make adjacency grid
   #ifdef USE_3D
   Grid grid = makeGrid(SCENE_SIZE, CELL_SIZE, num_of_fishes, in_fishes->x, in_fishes->y, in_fishes->z);
