@@ -40,6 +40,8 @@
     Host code
 */
 
+#define DEBUG_MSG 1
+
 // includes, system
 #include <stdlib.h>
 #include <stdio.h>
@@ -68,7 +70,6 @@
 #include <vector_types.h>
 
 #define AS_INCLUDE
-#define USE_3D
 #include "boids.cu"
 
 #define REFRESH_DELAY     1 //ms
@@ -182,6 +183,7 @@ int main(int argc, char **argv)
 
     printf("starting simulation...\n");
 
+    T("runSimulation()");
     runSimulation(argc, argv);
 
     printf("simulation completed\n");
@@ -265,6 +267,7 @@ bool runSimulation(int argc, char **argv)
     glutMotionFunc(motion);
     glutCloseFunc(cleanup);
 
+    T("createVBO()");
     // create VBO
     createVBO(&vbo, &cuda_vbo_resource, cudaGraphicsMapFlagsWriteDiscard);
 
@@ -289,6 +292,7 @@ void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource)
                                                          *vbo_resource));
     
     copy_to_vbo<<<1, NUM_OF_BOIDS>>>(dptr, *in_fishes, NUM_OF_BOIDS);
+    deviceCheckErrors("copy_to_vbo");
 
     // unmap buffer object
     checkCudaErrors(cudaGraphicsUnmapResources(1, vbo_resource, 0));
@@ -329,10 +333,12 @@ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 // Display callback
 void display()
 {
+    T("display()");
     sdkStartTimer(&fps_timer);
 
     // run CUDA kernel to generate vertex positions
     advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, DT);
+    T("copyFishesToVbo()");
     copyFishesToVbo(&cuda_vbo_resource);
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -364,6 +370,8 @@ void display()
 
     sdkStopTimer(&fps_timer);
     computeFPS();
+    T("display() finished");
+    DEBUG("\n");
 }
 
 void timerEvent(int value)

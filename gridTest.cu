@@ -95,7 +95,8 @@ void test_2d(){
 	deviceCopy(d_x, x, length*sizeof(double), cudaMemcpyHostToDevice);
 	deviceCopy(d_y, y, length*sizeof(double), cudaMemcpyHostToDevice);
 
-	Grid grid = copyToHost(makeGrid(grid_size, cell_size, length, d_x, d_y));
+	Grid d_grid = makeGrid(grid_size, cell_size, length, d_x, d_y);
+	Grid grid = copyToHost(d_grid);
 
 	int ids_exp[] = {0, 1, 3, 2, 4, 5, 6, 7, 8};
 	int cells_exp[] = {-1, 0, 1, 10, 11, 22, 54, 87, 88};
@@ -138,6 +139,7 @@ void test_2d(){
 		}
 	}
 	res += int_should_equal(count, 4);
+	freeGrid(d_grid);
 
 	printf(res == 0 ? "PASSED\n" : "FAILED\n");
 }

@@ -30,4 +30,12 @@ void deviceFree(void* pointer){
 	}
 }
 
+void deviceCheckErrors(char* name){
+	cudaError_t err = cudaGetLastError();
+	if (err != cudaSuccess) {
+		fprintf(stderr, "Failed to launch %s (error code %s)!\n", name, cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+}
+
 #endif
