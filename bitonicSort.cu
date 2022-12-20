@@ -111,7 +111,7 @@ struct key_val_buffer{
   int* values;
 };
 
-__global__ void bitonic_sort_pairs_step(int* keys, int* values, int j, int k)
+__global__ void bitonic_sort_pairs_step(int* keys, int* values, int j, int k, size_t length)
 {
   unsigned int i, ixj; /* Sorting partners: i and ixj */
   i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -159,15 +159,14 @@ __global__ void fill_pairs(int* destination_a, int* destination_b, size_t start,
 
 void bitonic_sort_pairs_pow2(int* keys, int* values, size_t length)
 {
-  dim3 blocks(length > 64 ? 64 : 1, 1);
-  dim3 threads(length > 64 ? length / 64 : length, 1);
+  kernelConfig kernel_size = calculateKernelConfig(length, MAX_THREADS_PER_BLOCK);
 
   int j, k;
   /* Major step */
   for (k = 2; k <= length; k <<= 1) {
     /* Minor step */
     for (j=k>>1; j>0; j=j>>1) {
-      bitonic_sort_pairs_step<<<blocks, threads>>>(keys, values, j, k);
+      bitonic_sort_pairs_step<<<kernel_size.blocks, kernel_size.threads>>>(keys, values, j, k, length);
       deviceCheckErrors("bitonic_sort_pairs_step");
     }
   }

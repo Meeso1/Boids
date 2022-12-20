@@ -176,21 +176,28 @@ __global__ void findCellStarts(int* sortedCells, int* starts, size_t length){
 // NOTE: Points not in [0, scene_size] x [0, scene_size] will not be included in the grid and will be treated as if they have no neighbours
 #ifdef USE_3D
 Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x, double* y, double* z){
-	int res = getGridResolution(scene_size, cell_size);
+	kernelConfig kernel_size;
+	size_t res = getGridResolution(scene_size, cell_size);
 
 	IndexesWithCells assignedCells;
 	deviceMalloc((void**)&assignedCells.indexes, num_of_points * sizeof(int));
 	deviceMalloc((void**)&assignedCells.cells, num_of_points * sizeof(int));
 
-	assignCells<<<1, num_of_points>>>(x, y, z, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
+	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
+	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, z, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
+	deviceCheckErrors("assignCells");
 
 	bitonic_sort_pairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
 
 	int* cellStarts = NULL;
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
 
-	fillStarts<<<1, numOfCells(res)>>>(cellStarts, numOfCells(res));
-	findCellStarts<<<1, num_of_points>>>(assignedCells.cells, cellStarts, num_of_points);
+	kernel_size = calculateKernelConfig(numOfCells(res), MAX_THREADS_PER_BLOCK);
+	fillStarts<<<kernel_size.blocks, kernel_size.threads>>>(cellStarts, numOfCells(res));
+	deviceCheckErrors("fillStarts");
+	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
+	findCellStarts<<<kernel_size.blocks, kernel_size.threads>>>(assignedCells.cells, cellStarts, num_of_points);
+	deviceCheckErrors("findCellStarts");
 
 	Grid grid = {
 		assignedCells, 
@@ -205,7 +212,8 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 }
 #else
 Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x, double* y){
-	int res = getGridResolution(scene_size, cell_size);
+	kernelConfig kernel_size;
+	size_t res = getGridResolution(scene_size, cell_size);
 
 	T("grid: deviceMalloc()");
 
@@ -214,7 +222,8 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	deviceMalloc((void**)&assignedCells.cells, num_of_points * sizeof(int));
 
 	T("grid: assignCells()");
-	assignCells<<<1, num_of_points>>>(x, y, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
+	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
+	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
 	deviceCheckErrors("assignCells");
 
 	bitonic_sort_pairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
@@ -224,9 +233,11 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
 
 	T("grid: fillStarts()");
-	fillStarts<<<1, numOfCells(res)>>>(cellStarts, numOfCells(res));
+	kernel_size = calculateKernelConfig(numOfCells(res), MAX_THREADS_PER_BLOCK);
+	fillStarts<<<kernel_size.blocks, kernel_size.threads>>>(cellStarts, numOfCells(res));
 	deviceCheckErrors("fillStarts");
-	findCellStarts<<<1, num_of_points>>>(assignedCells.cells, cellStarts, num_of_points);
+	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
+	findCellStarts<<<kernel_size.blocks, kernel_size.threads>>>(assignedCells.cells, cellStarts, num_of_points);
 	deviceCheckErrors("findCellStarts");
 
 	Grid grid = {

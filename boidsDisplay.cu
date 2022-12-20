@@ -63,18 +63,22 @@
 #include <cuda_gl_interop.h>
 
 // Utilities and timing functions
-#include <helper_functions.h>    // includes cuda.h and cuda_runtime_api.h
+#include <helper_functions.h>
 
 // CUDA helper functions
-#include <helper_cuda.h>         // helper functions for CUDA error check
+#include <helper_cuda.h>
 #include <vector_types.h>
 
+#define MAX_THREADS_PER_BLOCK 1024
 #define AS_INCLUDE
 #include "boids.cu"
 
-#define REFRESH_DELAY     1 //ms
+#define REFRESH_DELAY 1 // ms
+#define NUM_OF_BOIDS 100
+#define DT 0.01
+#define BOID_SIZE 0.02
+#define MAX(a,b) ((a > b) ? a : b)
 
-////////////////////////////////////////////////////////////////////////////////
 // constants
 const unsigned int window_width  = 512;
 const unsigned int window_height = 512;
@@ -82,9 +86,6 @@ const unsigned int window_height = 512;
 // vbo variables
 GLuint vbo;
 struct cudaGraphicsResource *cuda_vbo_resource;
-void *d_vbo_buffer = NULL;
-
-float sim_time = 0.0;
 
 // mouse controls
 int mouse_old_x, mouse_old_y;
@@ -94,24 +95,16 @@ float translate_z = -3.0;
 
 StopWatchInterface *fps_timer = NULL;
 
-// Auto-Verification Code
 int fpsCount = 0;        // FPS count for averaging
 int fpsLimit = 1;        // FPS limit for sampling
 float avgFPS = 0.0f;
 unsigned int frameCount = 0;
+float sim_time = 0.0;
 
-#define NUM_OF_BOIDS 100
-#define DT 0.01
 Fish* in_fishes;
 Fish* out_fishes;
 int* neighbour_cell_buffer;
 
-#define BOID_SIZE 0.02
-
-#define MAX(a,b) ((a > b) ? a : b)
-
-////////////////////////////////////////////////////////////////////////////////
-// declaration, forward
 bool runSimulation(int argc, char **argv);
 void cleanup();
 
@@ -205,16 +198,17 @@ void computeFPS()
     }
 
     char fps[256];
-    sprintf(fps, "Cuda GL Interop (VBO): %3.1f fps", avgFPS);
+    sprintf(fps, "Boids simulation: %3.1f fps", avgFPS);
     glutSetWindowTitle(fps);
 }
 
 bool initGL(int *argc, char **argv)
 {
+    T("initGL()");
     glutInit(argc, argv);
     glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
     glutInitWindowSize(window_width, window_height);
-    glutCreateWindow("Cuda GL Interop (VBO)");
+    glutCreateWindow("Boids simulation");
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
     glutMotionFunc(motion);

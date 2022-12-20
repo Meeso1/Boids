@@ -277,7 +277,10 @@ __global__ void updateFish(const Fish in, Fish out, Grid grid, int* neighbour_ce
       }
 
       while(index < grid.numOfIndexes && grid.indexes.cells[index] == cell){
-        if(index == i) continue;
+        if(index == i) {
+          index++;
+          continue;
+        }
 
         // process neighbour
         #ifdef USE_3D
@@ -444,7 +447,9 @@ void initSimulation(Fish** device_in_fishes, Fish** device_out_fishes, int** dev
   T("fillNeighbourCellBuffer()");
   
   // Fill it with neighbour indexes, as grid is static and they won't change
-  fillNeighbourCellBuffer<<<1, num_of_cells>>>(*device_neighbour_buff, num_of_cells, res);
+  kernelConfig kernel_size = calculateKernelConfig(num_of_cells, MAX_THREADS_PER_BLOCK);
+  fillNeighbourCellBuffer<<<kernel_size.blocks, kernel_size.threads>>>(*device_neighbour_buff, num_of_cells, res);
+  deviceCheckErrors("fillNeighbourCellBuffer()");
 
   *device_in_fishes = d_in_fish;
   *device_out_fishes = d_out_fish;
@@ -487,7 +492,9 @@ void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbou
   T("updateFish()");
 
   // Launch CUDA Kernel
-  updateFish<<<1, num_of_fishes>>>(*in_fishes, *out_fishes, grid, neighbour_buff, dt, num_of_fishes);
+  kernelConfig kernel_size = calculateKernelConfig(num_of_fishes, MAX_THREADS_PER_BLOCK);
+  updateFish<<<kernel_size.blocks, kernel_size.threads>>>(*in_fishes, *out_fishes, grid, neighbour_buff, dt, num_of_fishes);
+  //cudaDeviceSynchronize();
   deviceCheckErrors("updateFish");
 
   freeGrid(grid);
