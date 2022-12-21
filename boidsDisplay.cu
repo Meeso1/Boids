@@ -40,7 +40,7 @@
     Host code
 */
 
-#define DEBUG_MSG 1
+#define DEBUG_MSG 10
 
 // includes, system
 #include <stdlib.h>
@@ -72,6 +72,8 @@
 #define MAX_THREADS_PER_BLOCK 1024
 #define AS_INCLUDE
 #include "boids.cu"
+
+#define T(s) POINT(1, s)
 
 #define REFRESH_DELAY 1 // ms
 #define NUM_OF_BOIDS 100
@@ -440,3 +442,5 @@ void motion(int x, int y)
     mouse_old_x = x;
     mouse_old_y = y;
 }
+
+#undef T

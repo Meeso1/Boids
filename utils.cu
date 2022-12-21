@@ -12,10 +12,10 @@
 #define DEBUG_MSG 0
 #endif
 
-#define DEBUG(...) if(DEBUG_MSG != 0) printf(__VA_ARGS__)
+#define DEBUG_LEVEL(level, ...) if(DEBUG_MSG >= level) printf(__VA_ARGS__)
+#define DEBUG(...) DEBUG_LEVEL(1, __VA_ARGS__)
 #define IN_DEBUG(expr) if(DEBUG_MSG != 0) do{expr;}while(0)
-#define B(i) DEBUG("[%2d]======>\n", i)
-#define T(s) DEBUG("[%s]\n", s)
+#define POINT(level, s) DEBUG_LEVEL(level, "%*c[%s]\n", 2*(level+1), ' ', s)
 
 #ifdef USE_3D
 #define VECT_0 {0, 0, 0}

@@ -12,6 +12,8 @@
 #include "cudaUtils.cu"
 #include "utils.cu"
 
+#define T(s) POINT(4, s)
+
 ///
 /// FLOAT
 ///
@@ -212,3 +214,5 @@ void bitonic_sort_pairs(int* keys, int* values, size_t length, int max_key, bool
   deviceFree(buffer.keys);
   deviceFree(buffer.values);
 }
+
+#undef T

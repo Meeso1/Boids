@@ -6,6 +6,8 @@
 #include "utils.cu"
 #include "grid.cu"
 
+#define T(s) POINT(2, s)
+
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
 
@@ -528,3 +530,5 @@ int main(void) {
   return 0;
 }
 #endif
+
+#undef T

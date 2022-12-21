@@ -5,6 +5,8 @@
 #include "cudaUtils.cu"
 #include "bitonicSort.cu"
 
+#define T(s) POINT(3, s)
+
 #ifdef USE_3D
 #define NUM_OF_NEIGHBOURS 3*3*3
 #else
@@ -280,3 +282,5 @@ void freeGrid(Grid grid){
 	deviceFree(grid.indexes.cells);
 	deviceFree(grid.cellStarts);
 }
+
+#undef T
