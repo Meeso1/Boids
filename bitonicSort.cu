@@ -196,7 +196,6 @@ key_val_buffer createPairsBuffer(int* keys, int* values, size_t pairs_length, si
   buffer.keys = buf_keys;
   buffer.values = buf_vals;
 
-  DEBUG("Allocated buffer at %p and %p\n", buffer.keys, buffer.values);
   return buffer;
 }
 

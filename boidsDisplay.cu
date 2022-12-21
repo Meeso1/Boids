@@ -40,7 +40,7 @@
     Host code
 */
 
-#define DEBUG_MSG 10
+#define DEBUG_MSG 0
 
 // includes, system
 #include <stdlib.h>
@@ -69,15 +69,17 @@
 #include <helper_cuda.h>
 #include <vector_types.h>
 
-#define MAX_THREADS_PER_BLOCK 1024
+#define MAX_THREADS_PER_BLOCK max_threads
 #define AS_INCLUDE
+#define USE_3D
+#define TYPES 3
 #include "boids.cu"
 
 #define T(s) POINT(1, s)
 
 #define REFRESH_DELAY 1 // ms
-#define NUM_OF_BOIDS 100
-#define BOID_SIZE 0.02
+#define NUM_OF_BOIDS 10000
+#define BOID_SIZE 0.01
 #define MAX(a,b) ((a > b) ? a : b)
 
 // constants
@@ -243,6 +245,7 @@ bool runSimulation(int argc, char **argv)
 {
     // use command-line specified CUDA device, otherwise use device with highest Gflops/s
     int devID = findCudaDevice(argc, (const char **)argv);
+    setMaxThreads();
 
     // First initialize OpenGL context, so we can properly set the GL for CUDA.
     // This is necessary in order to achieve optimal performance with OpenGL/CUDA interop.
@@ -330,19 +333,22 @@ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 void display()
 {
     T("display()");
-    if(running == 0){
-        return;
-    }
 
     // calculate dt
     clock_t now = clock();
     double dt = (now - last_frame_time) / ((double)CLOCKS_PER_SEC); 
     last_frame_time = now;
 
-    // run CUDA kernel to generate vertex positions
-    advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, dt);
-    T("copyFishesToVbo()");
-    copyFishesToVbo(&cuda_vbo_resource);
+    if(running == 1){
+        // run CUDA kernel to generate vertex positions
+        advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, dt);
+        T("copyFishesToVbo()");
+        copyFishesToVbo(&cuda_vbo_resource);
+
+        // Advance time
+        sim_time += dt;
+        computeFPS();
+    }
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -364,10 +370,6 @@ void display()
 
     glutSwapBuffers();
 
-    // Advance time
-    sim_time += dt;
-
-    computeFPS();
     T("display() finished");
     DEBUG("\n");
 }

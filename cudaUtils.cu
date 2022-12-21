@@ -6,6 +6,8 @@
 #ifndef CUDAUTILS
 #define CUDAUTILS
 
+size_t max_threads = 128;
+
 struct kernelConfig{
 	size_t blocks;
 	size_t threads;
@@ -13,7 +15,6 @@ struct kernelConfig{
 
 void deviceMalloc(void** pointer, size_t size){
 	cudaError_t error = cudaMalloc(pointer, size);
-	printf("	malloc (%p)\n", *pointer);
 	if(error != cudaSuccess){
 		fprintf(stderr, "Failed to allocate device vector (error code: %s)\n", cudaGetErrorString(error));
 		exit(EXIT_FAILURE);
@@ -29,10 +30,7 @@ void deviceCopy(void* destination, const void* source, size_t size, cudaMemcpyKi
 }
 
 void deviceFree(void* pointer){
-	printf("	free   (%p", pointer);
-	fflush(stdout);
 	cudaError_t err = cudaFree(pointer);
-	printf(")\n");
 	if (err != cudaSuccess) {
 		fprintf(stderr, "Failed to free device vector (error code: %s)\n", cudaGetErrorString(err));
 		exit(EXIT_FAILURE);
@@ -56,6 +54,14 @@ kernelConfig calculateKernelConfig(size_t total_num_of_threads, size_t max_threa
 	size_t num_of_blocks = (int)b == b ? (int)b : (int)b + 1;
 
 	return {num_of_blocks, max_threads_per_block_x};
+}
+
+void setMaxThreads(){
+	int device;
+	cudaGetDevice(&device);
+	struct cudaDeviceProp props;
+	cudaGetDeviceProperties(&props, device);
+	max_threads = props.maxThreadsDim[0] / 2;
 }
 
 #endif

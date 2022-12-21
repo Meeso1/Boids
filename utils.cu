@@ -33,7 +33,7 @@ struct Fish{
 	double* vz;
 	#endif
 	#ifdef TYPES
-	int type;
+	int* type;
 	#endif
 };
 

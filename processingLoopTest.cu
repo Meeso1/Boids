@@ -1,4 +1,4 @@
-#define DEBUG_MSG 1
+#define DEBUG_MSG 10
 
 // includes, system
 #include <stdlib.h>
@@ -25,6 +25,8 @@
 #define MAX_THREADS_PER_BLOCK 1024
 #define AS_INCLUDE
 #include "boids.cu"
+
+#define T(s) POINT(1, s)
 
 // vbo variables
 float4* cuda_vbo_resource;

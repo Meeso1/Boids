@@ -11,16 +11,16 @@
 #define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
 
-#define MIN_V 1
-#define MAX_V 10
+#define MIN_V 10
+#define MAX_V 20
 
-#define ATTRACTION_STR 0.3
-#define INTERACTION1_RADIUS 8
+#define ATTRACTION_STR 0.45
+#define INTERACTION1_RADIUS 6
 
-#define SEPARATION_STR 0.5
+#define SEPARATION_STR 0.75
 #define INTERACTION2_RADIUS 3
 
-#define ALIGNMENT_STR 0.2
+#define ALIGNMENT_STR 0.3
 #define INTERACTION3_RADIUS 5
 
 #define REPULSION_STR 8
@@ -412,7 +412,7 @@ void freeHostFishes(Fish* fishes){
   free(fishes->vz);
   #endif
   #ifdef TYPES
-  free(fish->type);
+  free(fishes->type);
   #endif
   free(fishes);
 }
