@@ -72,7 +72,7 @@
 #define MAX_THREADS_PER_BLOCK max_threads
 #define AS_INCLUDE
 #define USE_3D
-#define TYPES 3
+#define TYPES 4
 #include "boids.cu"
 
 #define T(s) POINT(1, s)
@@ -88,7 +88,9 @@ const unsigned int window_height = 512;
 
 // vbo variables
 GLuint vbo;
+GLuint color_vbo;
 struct cudaGraphicsResource *cuda_vbo_resource;
+struct cudaGraphicsResource *cuda_color_resource;
 
 // mouse controls
 int mouse_old_x, mouse_old_y;
@@ -125,9 +127,20 @@ void motion(int x, int y);
 void timerEvent(int value);
 
 // Cuda functionality
-void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource);
+void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource, struct cudaGraphicsResource **color_resource);
 
-__global__ void copyToVbo(float4* pos, Fish fishes, int numElements)
+__device__ float4 getFishColor(int type, int num_of_types){
+    if(num_of_types == 1){
+        return make_float4(1, 0, 0, 1);
+    }
+    float t = type / ((float)num_of_types - 1);
+    float red = 1 - t;
+    float green = t < 0.5 ? 2*t : 1 - 2*t;
+    float blue = t;
+    return make_float4(red, green, blue, 1);
+}
+
+__global__ void copyToVbo(float4* pos, float4* colors, Fish fishes, int numElements)
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if(i >= numElements){
@@ -169,6 +182,16 @@ __global__ void copyToVbo(float4* pos, Fish fishes, int numElements)
         pos[3*i + 1] = make_float4(u - dy/3, v + dx/3, w, 1.0f);
         pos[3*i + 2] = make_float4(u + dy/3, v - dx/3, w, 1.0f);
     }
+
+    #ifndef TYPES
+    float4 color = make_float4(1, 0, 0, 1); // Red
+    #else
+    float4 color = getFishColor(fishes.type[i], TYPES);
+    #endif
+
+    colors[3*i]     = color;
+    colors[3*i + 1] = color;
+    colors[3*i + 2] = color;
 }
 
 int main(int argc, char **argv)
@@ -264,11 +287,12 @@ bool runSimulation(int argc, char **argv)
     T("createVBO()");
     // create VBO
     createVBO(&vbo, &cuda_vbo_resource, cudaGraphicsMapFlagsWriteDiscard);
+    createVBO(&color_vbo, &cuda_color_resource, cudaGraphicsMapFlagsWriteDiscard);
 
     initSimulation(&in_fishes, &out_fishes, &neighbour_cell_buffer, NUM_OF_BOIDS);
 
     // run the cuda part
-    copyFishesToVbo(&cuda_vbo_resource);
+    copyFishesToVbo(&cuda_vbo_resource, &cuda_color_resource);
 
     // init time variables
     previous_fps_update_time = clock();
@@ -280,21 +304,26 @@ bool runSimulation(int argc, char **argv)
     return true;
 }
 
-void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource)
+void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource, struct cudaGraphicsResource **color_resource)
 {
     // map OpenGL buffer object for writing from CUDA
     float4 *dptr;
     checkCudaErrors(cudaGraphicsMapResources(1, vbo_resource, 0));
     size_t num_bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&dptr, &num_bytes,
-                                                         *vbo_resource));
+    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&dptr, &num_bytes, *vbo_resource));
+    
+    float4 *d_color_ptr;
+    checkCudaErrors(cudaGraphicsMapResources(1, color_resource, 0));
+    size_t num_color_bytes;
+    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&d_color_ptr, &num_color_bytes, *color_resource));
     
     kernelConfig kernel_size = calculateKernelConfig(NUM_OF_BOIDS, MAX_THREADS_PER_BLOCK);
-    copyToVbo<<<kernel_size.blocks, kernel_size.threads>>>(dptr, *in_fishes, NUM_OF_BOIDS);
+    copyToVbo<<<kernel_size.blocks, kernel_size.threads>>>(dptr, d_color_ptr, *in_fishes, NUM_OF_BOIDS);
     deviceCheckErrors("copyToVbo");
 
     // unmap buffer object
     checkCudaErrors(cudaGraphicsUnmapResources(1, vbo_resource, 0));
+    checkCudaErrors(cudaGraphicsUnmapResources(1, color_resource, 0));
 }
 
 void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
@@ -343,7 +372,7 @@ void display()
         // run CUDA kernel to generate vertex positions
         advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, dt);
         T("copyFishesToVbo()");
-        copyFishesToVbo(&cuda_vbo_resource);
+        copyFishesToVbo(&cuda_vbo_resource, &cuda_color_resource);
 
         // Advance time
         sim_time += dt;
@@ -362,11 +391,14 @@ void display()
     // render from the vbo
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexPointer(4, GL_FLOAT, 0, 0);
+    glBindBuffer(GL_ARRAY_BUFFER, color_vbo);
+    glColorPointer(4, GL_FLOAT, 0, 0);
 
     glEnableClientState(GL_VERTEX_ARRAY);
-    glColor3f(1.0, 0.0, 0.0);
+    glEnableClientState(GL_COLOR_ARRAY);
     glDrawArrays(GL_TRIANGLES, 0, NUM_OF_BOIDS * 3);
     glDisableClientState(GL_VERTEX_ARRAY);
+    glEnableClientState(GL_COLOR_ARRAY);
 
     glutSwapBuffers();
 
@@ -389,6 +421,11 @@ void cleanup()
     if (vbo)
     {
         deleteVBO(&vbo, cuda_vbo_resource);
+    }
+
+    if (color_vbo)
+    {
+        deleteVBO(&color_vbo, cuda_color_resource);
     }
 
     freeFishes(in_fishes);
