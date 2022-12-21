@@ -75,7 +75,6 @@
 
 #define REFRESH_DELAY 1 // ms
 #define NUM_OF_BOIDS 100
-#define DT 0.01
 #define BOID_SIZE 0.02
 #define MAX(a,b) ((a > b) ? a : b)
 
@@ -93,13 +92,13 @@ int mouse_buttons = 0;
 float rotate_x = 0.0, rotate_y = 0.0;
 float translate_z = -3.0;
 
-StopWatchInterface *fps_timer = NULL;
-
 int fpsCount = 0;        // FPS count for averaging
-int fpsLimit = 1;        // FPS limit for sampling
-float avgFPS = 0.0f;
-unsigned int frameCount = 0;
+int fpsLimit = 10;       // FPS limit for sampling
+unsigned long frameCount = 0;
 float sim_time = 0.0;
+clock_t previous_fps_update_time;
+int running = 1;
+clock_t last_frame_time;
 
 Fish* in_fishes;
 Fish* out_fishes;
@@ -170,13 +169,12 @@ __global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
 
 int main(int argc, char **argv)
 {
-#if defined(__linux__)
+    #if defined(__linux__)
     setenv ("DISPLAY", ":0", 0);
-#endif
+    #endif
 
     printf("starting simulation...\n");
 
-    T("runSimulation()");
     runSimulation(argc, argv);
 
     printf("simulation completed\n");
@@ -188,18 +186,18 @@ void computeFPS()
     frameCount++;
     fpsCount++;
 
-    if (fpsCount == fpsLimit)
+    if (fpsCount >= fpsLimit)
     {
-        avgFPS = 1.f / (sdkGetAverageTimerValue(&fps_timer) / 1000.f);
+        clock_t now = clock();
+        float avgFPS = fpsCount / ((now - previous_fps_update_time) / ((float)CLOCKS_PER_SEC));
         fpsCount = 0;
-        fpsLimit = (int)MAX(avgFPS, 1.f);
+        previous_fps_update_time = now;
+        fpsLimit = (int)MAX(avgFPS, 2);
 
-        sdkResetTimer(&fps_timer);
+        char fps[256];
+        sprintf(fps, "Boids simulation: %3.1f fps", avgFPS);
+        glutSetWindowTitle(fps);
     }
-
-    char fps[256];
-    sprintf(fps, "Boids simulation: %3.1f fps", avgFPS);
-    glutSetWindowTitle(fps);
 }
 
 bool initGL(int *argc, char **argv)
@@ -215,7 +213,7 @@ bool initGL(int *argc, char **argv)
     glutTimerFunc(REFRESH_DELAY, timerEvent, 0);
 
     // initialize necessary OpenGL extensions
-    if (! isGLVersionSupported(2,0))
+    if (!isGLVersionSupported(2,0))
     {
         fprintf(stderr, "ERROR: Support for necessary OpenGL extensions missing.");
         fflush(stderr);
@@ -241,9 +239,6 @@ bool initGL(int *argc, char **argv)
 
 bool runSimulation(int argc, char **argv)
 {
-    // Create fps timer
-    sdkCreateTimer(&fps_timer);
-
     // use command-line specified CUDA device, otherwise use device with highest Gflops/s
     int devID = findCudaDevice(argc, (const char **)argv);
 
@@ -269,6 +264,10 @@ bool runSimulation(int argc, char **argv)
 
     // run the cuda part
     copyFishesToVbo(&cuda_vbo_resource);
+
+    // init time variables
+    previous_fps_update_time = clock();
+    last_frame_time = clock();
 
     // start rendering mainloop
     glutMainLoop();
@@ -328,10 +327,17 @@ void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 void display()
 {
     T("display()");
-    sdkStartTimer(&fps_timer);
+    if(running == 0){
+        return;
+    }
+
+    // calculate dt
+    clock_t now = clock();
+    double dt = (now - last_frame_time) / ((double)CLOCKS_PER_SEC); 
+    last_frame_time = now;
 
     // run CUDA kernel to generate vertex positions
-    advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, DT);
+    advance(in_fishes, out_fishes, NUM_OF_BOIDS, neighbour_cell_buffer, dt);
     T("copyFishesToVbo()");
     copyFishesToVbo(&cuda_vbo_resource);
 
@@ -348,26 +354,22 @@ void display()
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexPointer(4, GL_FLOAT, 0, 0);
 
-    // ???
     glEnableClientState(GL_VERTEX_ARRAY);
-    // set display color
     glColor3f(1.0, 0.0, 0.0);
-    // ???
     glDrawArrays(GL_TRIANGLES, 0, NUM_OF_BOIDS * 3);
-    // ???
     glDisableClientState(GL_VERTEX_ARRAY);
 
     glutSwapBuffers();
 
     // Advance time
-    sim_time += DT;
+    sim_time += dt;
 
-    sdkStopTimer(&fps_timer);
     computeFPS();
     T("display() finished");
     DEBUG("\n");
 }
 
+// Callback that posts redisplay signals
 void timerEvent(int value)
 {
     if (glutGetWindow())
@@ -379,8 +381,6 @@ void timerEvent(int value)
 
 void cleanup()
 {
-    sdkDeleteTimer(&fps_timer);
-
     if (vbo)
     {
         deleteVBO(&vbo, cuda_vbo_resource);
@@ -398,6 +398,9 @@ void keyboard(unsigned char key, int /*x*/, int /*y*/)
     {
         case (27):  // ESC
             glutDestroyWindow(glutGetWindow());
+            return;
+        case(32):   // SPACE
+            running = 1-running;    // 1 => 0, 0 => 1
             return;
     }
 }
