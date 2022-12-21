@@ -201,13 +201,13 @@ key_val_buffer createPairsBuffer(int* keys, int* values, size_t pairs_length, si
 
 void bitonicSortPairs(int* keys, int* values, size_t length, int max_key, bool src_is_device){
   size_t valid_size = nextPow2(length);
-  T("sort: createPairsBuffer()");
+  T("createPairsBuffer()");
   key_val_buffer buffer = createPairsBuffer(keys, values, length, valid_size, max_key, -1, src_is_device);
 
   T("bitonicSortPairsPow2()");
   bitonicSortPairsPow2(buffer.keys, buffer.values, valid_size);
 
-  T("sort: deviceCopy()");
+  T("deviceCopy()");
   deviceCopy(keys, buffer.keys, length * sizeof(int), src_is_device ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost);
   deviceCopy(values, buffer.values, length * sizeof(int), src_is_device ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost);
   deviceFree(buffer.keys);

@@ -45,6 +45,14 @@ void deviceCheckErrors(const char* name){
 	}
 }
 
+void deviceSynchronize(){
+	cudaError_t err = cudaDeviceSynchronize();
+	if (err != cudaSuccess) {
+		fprintf(stderr, "Failed to sync device (error code: %s)\n", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+}
+
 kernelConfig calculateKernelConfig(size_t total_num_of_threads, size_t max_threads_per_block_x){
 	if(total_num_of_threads <= max_threads_per_block_x){
 		return {1, total_num_of_threads};
@@ -58,9 +66,19 @@ kernelConfig calculateKernelConfig(size_t total_num_of_threads, size_t max_threa
 
 void setMaxThreads(){
 	int device;
-	cudaGetDevice(&device);
+	cudaError_t err = cudaGetDevice(&device);
+	if (err != cudaSuccess) {
+		fprintf(stderr, "Failed to get device (error code: %s)\n", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+
 	struct cudaDeviceProp props;
-	cudaGetDeviceProperties(&props, device);
+	err = cudaGetDeviceProperties(&props, device);
+	if (err != cudaSuccess) {
+		fprintf(stderr, "Failed to get device properties (error code: %s)\n", cudaGetErrorString(err));
+		exit(EXIT_FAILURE);
+	}
+
 	max_threads = props.maxThreadsDim[0] / 2;
 }
 

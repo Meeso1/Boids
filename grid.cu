@@ -181,22 +181,28 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	kernelConfig kernel_size;
 	size_t res = getGridResolution(scene_size, cell_size);
 
+	T("deviceMalloc()");
+
 	IndexesWithCells assignedCells;
 	deviceMalloc((void**)&assignedCells.indexes, num_of_points * sizeof(int));
 	deviceMalloc((void**)&assignedCells.cells, num_of_points * sizeof(int));
 
+	T("assignCells()");
 	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
 	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, z, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
 	deviceCheckErrors("assignCells");
 
 	bitonicSortPairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
+	T("sort finished");
 
 	int* cellStarts = NULL;
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
 
+	T("fillStarts()");
 	kernel_size = calculateKernelConfig(numOfCells(res), MAX_THREADS_PER_BLOCK);
 	fillStarts<<<kernel_size.blocks, kernel_size.threads>>>(cellStarts, numOfCells(res));
 	deviceCheckErrors("fillStarts");
+	deviceSynchronize();
 	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
 	findCellStarts<<<kernel_size.blocks, kernel_size.threads>>>(assignedCells.cells, cellStarts, num_of_points);
 	deviceCheckErrors("findCellStarts");
@@ -217,27 +223,28 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	kernelConfig kernel_size;
 	size_t res = getGridResolution(scene_size, cell_size);
 
-	T("grid: deviceMalloc()");
+	T("deviceMalloc()");
 
 	IndexesWithCells assignedCells;
 	deviceMalloc((void**)&assignedCells.indexes, num_of_points * sizeof(int));
 	deviceMalloc((void**)&assignedCells.cells, num_of_points * sizeof(int));
 
-	T("grid: assignCells()");
+	T("assignCells()");
 	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
 	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
 	deviceCheckErrors("assignCells");
 
 	bitonicSortPairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
-	T("grid: sort finished");
+	T("sort finished");
 
 	int* cellStarts = NULL;
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
 
-	T("grid: fillStarts()");
+	T("fillStarts()");
 	kernel_size = calculateKernelConfig(numOfCells(res), MAX_THREADS_PER_BLOCK);
 	fillStarts<<<kernel_size.blocks, kernel_size.threads>>>(cellStarts, numOfCells(res));
 	deviceCheckErrors("fillStarts");
+	deviceSynchronize();
 	kernel_size = calculateKernelConfig(num_of_points, MAX_THREADS_PER_BLOCK);
 	findCellStarts<<<kernel_size.blocks, kernel_size.threads>>>(assignedCells.cells, cellStarts, num_of_points);
 	deviceCheckErrors("findCellStarts");

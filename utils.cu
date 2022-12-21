@@ -16,6 +16,7 @@
 #define DEBUG(...) DEBUG_LEVEL(1, __VA_ARGS__)
 #define IN_DEBUG(expr) if(DEBUG_MSG != 0) do{expr;}while(0)
 #define POINT(level, s) DEBUG_LEVEL(level, "%*c[%s]\n", 2*(level+1), ' ', s)
+#define MAX(a,b) ((a > b) ? a : b)
 
 #ifdef USE_3D
 #define VECT_0 {0, 0, 0}

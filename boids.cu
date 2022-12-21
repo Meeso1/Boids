@@ -8,7 +8,6 @@
 
 #define T(s) POINT(2, s)
 
-#define NUM_OF_FISHES 50
 #define SCENE_SIZE 100
 
 #define MIN_V 10
@@ -26,7 +25,7 @@
 #define REPULSION_STR 8
 #define INTERACTION4_RADIUS 8
 
-#define COS_FOV 0
+#define COS_FOV 0 // cos(alpha/2), where alpha is field-of-view angle of the fish
 #define CELL_SIZE MAX(MAX(INTERACTION1_RADIUS, INTERACTION2_RADIUS), INTERACTION3_RADIUS)
 
 // Used to store data used in boid rules
@@ -506,6 +505,7 @@ void advance(Fish* in_fishes, Fish* out_fishes, int num_of_fishes, int* neighbou
 }
 
 #ifndef AS_INCLUDE
+#define NUM_OF_FISHES 50
 int main(void) {
   Fish* d_in_fish;
   Fish* d_out_fish;

@@ -25,21 +25,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/*
-    This example demonstrates how to use the Cuda OpenGL bindings to
-    dynamically modify a vertex buffer using a Cuda kernel.
-
-    The steps are:
-    1. Create an empty vertex buffer object (VBO)
-    2. Register the VBO with Cuda
-    3. Map the VBO for writing from Cuda
-    4. Run Cuda kernel to modify the vertex positions
-    5. Unmap the VBO
-    6. Render the results using OpenGL
-
-    Host code
-*/
-
 #define DEBUG_MSG 0
 
 // includes, system
@@ -80,7 +65,6 @@
 #define REFRESH_DELAY 1 // ms
 #define NUM_OF_BOIDS 10000
 #define BOID_SIZE 0.01
-#define MAX(a,b) ((a > b) ? a : b)
 
 // constants
 const unsigned int window_width  = 512;
@@ -115,8 +99,7 @@ void cleanup();
 
 // GL functionality
 bool initGL(int *argc, char **argv);
-void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
-               unsigned int vbo_res_flags);
+void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags);
 void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res);
 
 // rendering callbacks
@@ -183,6 +166,7 @@ __global__ void copyToVbo(float4* pos, float4* colors, Fish fishes, int numEleme
         pos[3*i + 2] = make_float4(u + dy/3, v - dx/3, w, 1.0f);
     }
 
+    // write vertex colors
     #ifndef TYPES
     float4 color = make_float4(1, 0, 0, 1); // Red
     #else
@@ -210,6 +194,7 @@ int main(int argc, char **argv)
 
 void computeFPS()
 {
+    T("computeFPS()");
     frameCount++;
     fpsCount++;
 
@@ -266,6 +251,8 @@ bool initGL(int *argc, char **argv)
 
 bool runSimulation(int argc, char **argv)
 {
+    T("runSimulation()");
+
     // use command-line specified CUDA device, otherwise use device with highest Gflops/s
     int devID = findCudaDevice(argc, (const char **)argv);
     setMaxThreads();
@@ -284,7 +271,6 @@ bool runSimulation(int argc, char **argv)
     glutMotionFunc(motion);
     glutCloseFunc(cleanup);
 
-    T("createVBO()");
     // create VBO
     createVBO(&vbo, &cuda_vbo_resource, cudaGraphicsMapFlagsWriteDiscard);
     createVBO(&color_vbo, &cuda_color_resource, cudaGraphicsMapFlagsWriteDiscard);
@@ -306,16 +292,18 @@ bool runSimulation(int argc, char **argv)
 
 void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource, struct cudaGraphicsResource **color_resource)
 {
+    T("copyFishesToVbo()");
+
     // map OpenGL buffer object for writing from CUDA
     float4 *dptr;
     checkCudaErrors(cudaGraphicsMapResources(1, vbo_resource, 0));
     size_t num_bytes;
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&dptr, &num_bytes, *vbo_resource));
     
+    // map color buffer
     float4 *d_color_ptr;
     checkCudaErrors(cudaGraphicsMapResources(1, color_resource, 0));
-    size_t num_color_bytes;
-    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&d_color_ptr, &num_color_bytes, *color_resource));
+    checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&d_color_ptr, &num_bytes, *color_resource));
     
     kernelConfig kernel_size = calculateKernelConfig(NUM_OF_BOIDS, MAX_THREADS_PER_BLOCK);
     copyToVbo<<<kernel_size.blocks, kernel_size.threads>>>(dptr, d_color_ptr, *in_fishes, NUM_OF_BOIDS);
@@ -326,9 +314,9 @@ void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource, struct cudaGrap
     checkCudaErrors(cudaGraphicsUnmapResources(1, color_resource, 0));
 }
 
-void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
-               unsigned int vbo_res_flags)
+void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res, unsigned int vbo_res_flags)
 {
+    T("createVBO()");
     assert(vbo);
 
     // create buffer object
@@ -349,6 +337,8 @@ void createVBO(GLuint *vbo, struct cudaGraphicsResource **vbo_res,
 
 void deleteVBO(GLuint *vbo, struct cudaGraphicsResource *vbo_res)
 {
+    T("deleteVBO()");
+
     // unregister this buffer object with CUDA
     checkCudaErrors(cudaGraphicsUnregisterResource(vbo_res));
 
@@ -418,6 +408,8 @@ void timerEvent(int value)
 
 void cleanup()
 {
+    T("cleanup()");
+
     if (vbo)
     {
         deleteVBO(&vbo, cuda_vbo_resource);
