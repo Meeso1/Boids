@@ -17,7 +17,7 @@ int main(){
 	deviceCopy(d_vals, values, length*sizeof(int), cudaMemcpyHostToDevice);
 
 	for(int i = 0; i < 20; i++){
-		key_val_buffer buf1 = create_pairs_buffer(d_keys, d_vals, length, next_pow_2(length), -1, -1, true);
+		key_val_buffer buf1 = createPairsBuffer(d_keys, d_vals, length, nextPow2(length), -1, -1, true);
 		deviceCopy(keys, d_keys, length*sizeof(int), cudaMemcpyDeviceToHost);
 		deviceCopy(values, d_vals, length*sizeof(int), cudaMemcpyDeviceToHost);
 		deviceFree(buf1.keys);
@@ -25,14 +25,14 @@ int main(){
 	}
 	printf("DONE\n");
 
-	bitonic_sort_pairs(d_keys, d_vals, length, length, true);
-	bitonic_sort_pairs(d_keys, d_vals, length, length, true);
-	bitonic_sort_pairs(d_keys, d_vals, length, length, true);
+	bitonicSortPairs(d_keys, d_vals, length, length, true);
+	bitonicSortPairs(d_keys, d_vals, length, length, true);
+	bitonicSortPairs(d_keys, d_vals, length, length, true);
 	printf("Done 2\n");
 
-	bitonic_sort_pairs(keys, values, length, length, false);
-	bitonic_sort_pairs(keys, values, length, length, false);
-	bitonic_sort_pairs(keys, values, length, length, false);
+	bitonicSortPairs(keys, values, length, length, false);
+	bitonicSortPairs(keys, values, length, length, false);
+	bitonicSortPairs(keys, values, length, length, false);
 	printf("Done 3\n");
 	return 0;
 }

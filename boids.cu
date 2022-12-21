@@ -106,7 +106,7 @@ __device__ bool is_in_front(Vector fish, Vector other, Vector v, double cos_fov)
 }
 #endif
 
-__device__ Vector get_position(const Fish fish, int i){
+__device__ Vector getPosition(const Fish fish, int i){
   return {
     fish.x[i],
     fish.y[i],
@@ -116,7 +116,7 @@ __device__ Vector get_position(const Fish fish, int i){
   };
 }
 
-__device__ Vector get_v(const Fish fish, int i){
+__device__ Vector getV(const Fish fish, int i){
   return {
     fish.vx[i],
     fish.vy[i],
@@ -129,9 +129,9 @@ __device__ Vector get_v(const Fish fish, int i){
 __device__ void updateAttraction(const Fish fish, int current, int other, double distance, FishUpdateData* data){
   if(distance > INTERACTION1_RADIUS) return;
   if(!is_in_front(
-    get_position(fish, current), 
-    get_position(fish, other), 
-    get_v(fish, current),
+    getPosition(fish, current), 
+    getPosition(fish, other), 
+    getV(fish, current),
     COS_FOV)
   ) return;
   #ifdef TYPES
@@ -149,9 +149,9 @@ __device__ void updateAttraction(const Fish fish, int current, int other, double
 __device__ void updateSeparation(const Fish fish, int current, int other, double distance, FishUpdateData* data){
   if(distance > INTERACTION2_RADIUS) return;
   if(!is_in_front(
-    get_position(fish, current), 
-    get_position(fish, other), 
-    get_v(fish, current), 
+    getPosition(fish, current), 
+    getPosition(fish, other), 
+    getV(fish, current), 
     COS_FOV)
   ) return;
 
@@ -165,9 +165,9 @@ __device__ void updateSeparation(const Fish fish, int current, int other, double
 __device__ void updateAlignment(const Fish fish, int current, int other, double distance, FishUpdateData* data){
   if(distance > INTERACTION3_RADIUS) return;
   if(!is_in_front(
-    get_position(fish, current), 
-    get_position(fish, other), 
-    get_v(fish, current),
+    getPosition(fish, current), 
+    getPosition(fish, other), 
+    getV(fish, current),
     COS_FOV)
   ) return;
   #ifdef TYPES
@@ -210,7 +210,7 @@ __device__ Vector getAvoidanceDv(const Fish fish, int current){
   return dv;
 }
 
-__device__ Vector get_dv(const Fish fish, int current, FishUpdateData* data){
+__device__ Vector getDv(const Fish fish, int current, FishUpdateData* data){
   Vector v1 = VECT_0;
   if(data->attractionNeighbours != 0){
     v1.x = (data->center.x / data->attractionNeighbours - fish.x[current]) * ATTRACTION_STR;
@@ -299,7 +299,7 @@ __global__ void updateFish(const Fish in, Fish out, Grid grid, int* neighbour_ce
     }
   }
 
-  Vector dv = get_dv(in, i, &data);
+  Vector dv = getDv(in, i, &data);
   out.vx[i] = in.vx[i] + dv.x;
   out.vy[i] = in.vy[i] + dv.y;
   #ifdef USE_3D

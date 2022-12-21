@@ -189,7 +189,7 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, z, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
 	deviceCheckErrors("assignCells");
 
-	bitonic_sort_pairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
+	bitonicSortPairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
 
 	int* cellStarts = NULL;
 	deviceMalloc((void**)&cellStarts, numOfCells(res) * sizeof(int));
@@ -228,7 +228,7 @@ Grid makeGrid(int scene_size, double cell_size, size_t num_of_points, double* x,
 	assignCells<<<kernel_size.blocks, kernel_size.threads>>>(x, y, scene_size, cell_size, num_of_points, assignedCells.indexes, assignedCells.cells);
 	deviceCheckErrors("assignCells");
 
-	bitonic_sort_pairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
+	bitonicSortPairs(assignedCells.cells, assignedCells.indexes, num_of_points, numOfCells(res), true); // numOfCells is bigger than every cell index
 	T("grid: sort finished");
 
 	int* cellStarts = NULL;
@@ -277,7 +277,7 @@ Grid copyToHost(Grid src){
 }
 
 void freeGrid(Grid grid){
-	T("grid: freeGrid()");
+	T("freeGrid()");
 	deviceFree(grid.indexes.indexes);
 	deviceFree(grid.indexes.cells);
 	deviceFree(grid.cellStarts);

@@ -17,7 +17,7 @@
 ///
 /// FLOAT
 ///
-__global__ void bitonic_sort_step(float* dev_values, int j, int k)
+__global__ void bitonicSortStep(float* dev_values, int j, int k)
 {
   unsigned int i, ixj; /* Sorting partners: i and ixj */
   i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -59,7 +59,7 @@ __global__ void fill(float* destination, size_t start, size_t destination_length
 /**
 * Inplace bitonic sort using CUDA.
 */
-void bitonic_sort_pow2(float* dev_values, size_t length)
+void bitonicSortPow2(float* dev_values, size_t length)
 {
   dim3 blocks(length > 64 ? 64 : 1, 1);
   dim3 threads(length > 64 ? length / 64 : length, 1);
@@ -69,18 +69,18 @@ void bitonic_sort_pow2(float* dev_values, size_t length)
   for (k = 2; k <= length; k <<= 1) {
     /* Minor step */
     for (j=k>>1; j>0; j=j>>1) {
-      bitonic_sort_step<<<blocks, threads>>>(dev_values, j, k);
+      bitonicSortStep<<<blocks, threads>>>(dev_values, j, k);
     }
   }
 }
 
-size_t next_pow_2(size_t num){
+size_t nextPow2(size_t num){
   float log2 = log(num) / log(2);
   int exp = log2 == (int)log2 ? (int)log2 : (int)log2 + 1;
   return (size_t)pow(2, exp);
 }
 
-float* create_buffer(float* values, size_t values_length, size_t buffer_length, float fill_value){
+float* createBuffer(float* values, size_t values_length, size_t buffer_length, float fill_value){
   float* buffer = NULL;
   deviceMalloc((void**)&buffer, buffer_length * sizeof(float));
   deviceCopy(buffer, values, values_length * sizeof(float), cudaMemcpyHostToDevice);
@@ -95,11 +95,11 @@ float* create_buffer(float* values, size_t values_length, size_t buffer_length, 
   return buffer;
 }
 
-void bitonic_sort(float* values, size_t length, float max_val){
-  size_t valid_size = next_pow_2(length);
-  float* buffer = create_buffer(values, length, valid_size, max_val);
+void bitonicSort(float* values, size_t length, float max_val){
+  size_t valid_size = nextPow2(length);
+  float* buffer = createBuffer(values, length, valid_size, max_val);
 
-  bitonic_sort_pow2(buffer, valid_size);
+  bitonicSortPow2(buffer, valid_size);
 
   deviceCopy(values, buffer, length * sizeof(float), cudaMemcpyDeviceToHost);
   deviceFree(buffer);
@@ -113,7 +113,7 @@ struct key_val_buffer{
   int* values;
 };
 
-__global__ void bitonic_sort_pairs_step(int* keys, int* values, int j, int k, size_t length)
+__global__ void bitonicSortPairsStep(int* keys, int* values, int j, int k, size_t length)
 {
   unsigned int i, ixj; /* Sorting partners: i and ixj */
   i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -148,7 +148,7 @@ __global__ void bitonic_sort_pairs_step(int* keys, int* values, int j, int k, si
   }
 }
 
-__global__ void fill_pairs(int* destination_a, int* destination_b, size_t start, size_t destination_length, int fill_a, int fill_b){
+__global__ void fillPairs(int* destination_a, int* destination_b, size_t start, size_t destination_length, int fill_a, int fill_b){
   int i = threadIdx.x + blockDim.x * blockIdx.x;
 
   if(i + start >= destination_length){
@@ -159,7 +159,7 @@ __global__ void fill_pairs(int* destination_a, int* destination_b, size_t start,
   destination_b[i + start] = fill_b;
 }
 
-void bitonic_sort_pairs_pow2(int* keys, int* values, size_t length)
+void bitonicSortPairsPow2(int* keys, int* values, size_t length)
 {
   kernelConfig kernel_size = calculateKernelConfig(length, MAX_THREADS_PER_BLOCK);
 
@@ -168,13 +168,13 @@ void bitonic_sort_pairs_pow2(int* keys, int* values, size_t length)
   for (k = 2; k <= length; k <<= 1) {
     /* Minor step */
     for (j=k>>1; j>0; j=j>>1) {
-      bitonic_sort_pairs_step<<<kernel_size.blocks, kernel_size.threads>>>(keys, values, j, k, length);
-      deviceCheckErrors("bitonic_sort_pairs_step");
+      bitonicSortPairsStep<<<kernel_size.blocks, kernel_size.threads>>>(keys, values, j, k, length);
+      deviceCheckErrors("bitonicSortPairsStep");
     }
   }
 }
 
-key_val_buffer create_pairs_buffer(int* keys, int* values, size_t pairs_length, size_t buffer_length, int fill_key, int fill_value, bool src_is_device){
+key_val_buffer createPairsBuffer(int* keys, int* values, size_t pairs_length, size_t buffer_length, int fill_key, int fill_value, bool src_is_device){
   key_val_buffer buffer;
 
   int* buf_keys = NULL;
@@ -189,8 +189,8 @@ key_val_buffer create_pairs_buffer(int* keys, int* values, size_t pairs_length, 
   if(len_to_fill > 0){
     dim3 blocks(len_to_fill > 64 ? 64 : 1, 1);
     dim3 threads(len_to_fill > 64 ? len_to_fill / 64 : len_to_fill, 1);
-    fill_pairs<<<blocks, threads>>>(buf_keys, buf_vals, pairs_length, buffer_length, fill_key, fill_value);
-    deviceCheckErrors("fill_pairs");
+    fillPairs<<<blocks, threads>>>(buf_keys, buf_vals, pairs_length, buffer_length, fill_key, fill_value);
+    deviceCheckErrors("fillPairs");
   }
 
   buffer.keys = buf_keys;
@@ -200,13 +200,13 @@ key_val_buffer create_pairs_buffer(int* keys, int* values, size_t pairs_length, 
   return buffer;
 }
 
-void bitonic_sort_pairs(int* keys, int* values, size_t length, int max_key, bool src_is_device){
-  size_t valid_size = next_pow_2(length);
-  T("sort: fill_pairs_buffer()");
-  key_val_buffer buffer = create_pairs_buffer(keys, values, length, valid_size, max_key, -1, src_is_device);
+void bitonicSortPairs(int* keys, int* values, size_t length, int max_key, bool src_is_device){
+  size_t valid_size = nextPow2(length);
+  T("sort: createPairsBuffer()");
+  key_val_buffer buffer = createPairsBuffer(keys, values, length, valid_size, max_key, -1, src_is_device);
 
-  T("sort: bitonic_sort_pairs_pow2()");
-  bitonic_sort_pairs_pow2(buffer.keys, buffer.values, valid_size);
+  T("bitonicSortPairsPow2()");
+  bitonicSortPairsPow2(buffer.keys, buffer.values, valid_size);
 
   T("sort: deviceCopy()");
   deviceCopy(keys, buffer.keys, length * sizeof(int), src_is_device ? cudaMemcpyDeviceToDevice : cudaMemcpyDeviceToHost);

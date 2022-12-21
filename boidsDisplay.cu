@@ -94,8 +94,8 @@ int mouse_buttons = 0;
 float rotate_x = 0.0, rotate_y = 0.0;
 float translate_z = -3.0;
 
-int fpsCount = 0;        // FPS count for averaging
-int fpsLimit = 10;       // FPS limit for sampling
+int fpsCount = 0;        
+int fpsLimit = 10;
 unsigned long frameCount = 0;
 float sim_time = 0.0;
 clock_t previous_fps_update_time;
@@ -125,7 +125,7 @@ void timerEvent(int value);
 // Cuda functionality
 void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource);
 
-__global__ void copy_to_vbo(float4* pos, Fish fishes, int numElements)
+__global__ void copyToVbo(float4* pos, Fish fishes, int numElements)
 {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
     if(i >= numElements){
@@ -286,8 +286,9 @@ void copyFishesToVbo(struct cudaGraphicsResource **vbo_resource)
     checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&dptr, &num_bytes,
                                                          *vbo_resource));
     
-    copy_to_vbo<<<1, NUM_OF_BOIDS>>>(dptr, *in_fishes, NUM_OF_BOIDS);
-    deviceCheckErrors("copy_to_vbo");
+    kernelConfig kernel_size = calculateKernelConfig(NUM_OF_BOIDS, MAX_THREADS_PER_BLOCK);
+    copyToVbo<<<kernel_size.blocks, kernel_size.threads>>>(dptr, *in_fishes, NUM_OF_BOIDS);
+    deviceCheckErrors("copyToVbo");
 
     // unmap buffer object
     checkCudaErrors(cudaGraphicsUnmapResources(1, vbo_resource, 0));

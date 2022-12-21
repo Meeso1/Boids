@@ -9,7 +9,7 @@ void small_test(){
 	int keys[]   = {11, 23, 4,  43, 8,  90, 2,  5,  6,  7,  10};
 	int values[] = {1,  2,  3,  4,  5,  6,  7,  8,  9,  10, 11};
 
-	bitonic_sort_pairs(keys, values, length, 1<<20, false);
+	bitonicSortPairs(keys, values, length, 1<<20, false);
 
 	int res = 0;
 	int keys_exp[]   = {2, 4, 5, 6, 7,  8, 10, 11, 23, 43, 90};
@@ -39,7 +39,7 @@ void big_test(){
 		values[i] = i;
 	}
 
-	bitonic_sort_pairs(keys, values, length, 1<<20, false);
+	bitonicSortPairs(keys, values, length, 1<<20, false);
 
 	int res = 0;
 	int* keys_exp   = (int*)malloc(length*sizeof(int));
